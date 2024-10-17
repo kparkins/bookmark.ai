@@ -13,6 +13,7 @@ function LibraryTab() {
   const [savingNotes, setSavingNotes] = useState({});
   const [editingNotes, setEditingNotes] = useState({});
   const [expandedSummaries, setExpandedSummaries] = useState({});
+  const [highlightedItems, setHighlightedItems] = useState({});
 
   // Truncate text for display
   const truncateText = (text, maxLength = 100) => {
@@ -108,6 +109,17 @@ function LibraryTab() {
     }));
   };
 
+  const highlightItem = (id) => {
+    setHighlightedItems((prev) => ({ ...prev, [id]: true }));
+    setTimeout(() => {
+      setHighlightedItems((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }, 1000);
+  };
+
   const beginEditingNotes = (embedding) => {
     setEditingNotes((prev) => ({ ...prev, [embedding.id]: true }));
     setNoteDrafts((prev) => ({
@@ -176,12 +188,68 @@ function LibraryTab() {
           delete next[embedding.id];
           return next;
         });
+        highlightItem(embedding.id);
       }
-
-      showStatus("Notes updated", "success");
     } catch (error) {
       console.error("Error updating notes:", error);
       showStatus(error?.message || "Error updating notes", "error");
+    } finally {
+      setSavingNotes((prev) => {
+        const next = { ...prev };
+        delete next[embedding.id];
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteNote = async (embedding) => {
+    if (!window.confirm("Delete this note?")) {
+      return;
+    }
+
+    setSavingNotes((prev) => ({ ...prev, [embedding.id]: true }));
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            action: "updateEmbeddingNote",
+            id: embedding.id,
+            note: "",
+          },
+          (result) => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+              reject(new Error(error.message));
+              return;
+            }
+            resolve(result);
+          },
+        );
+      });
+
+      if (!response?.success) {
+        showStatus(response?.error || "Unable to delete note", "error");
+        return;
+      }
+
+      if (response.embedding) {
+        updateEmbedding(embedding.id, response.embedding);
+        setNoteDrafts((prev) => {
+          const next = { ...prev };
+          delete next[embedding.id];
+          return next;
+        });
+        setEditingNotes((prev) => {
+          const next = { ...prev };
+          delete next[embedding.id];
+          return next;
+        });
+        highlightItem(embedding.id);
+      }
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      showStatus(error?.message || "Error deleting note", "error");
     } finally {
       setSavingNotes((prev) => {
         const next = { ...prev };
@@ -225,7 +293,10 @@ function LibraryTab() {
               );
 
               return (
-                <div key={embedding.id} className="embedding-item">
+                <div
+                  key={embedding.id}
+                  className={`embedding-item ${highlightedItems[embedding.id] ? "embedding-item-highlight" : ""}`}
+                >
                   <div className="embedding-item-header">
                     <div className="embedding-item-title">
                       <span
@@ -292,67 +363,88 @@ function LibraryTab() {
                       </div>
                     )}
 
-                    <div className="embedding-notes">
-                      <div className="notes-header">
-                        <span>Notes</span>
-                        {!isEditing && (
-                          <button
-                            type="button"
-                            className="btn-add-note"
-                            onClick={() => beginEditingNotes(embedding)}
-                          >
-                            {notePreview ? "Edit" : "Add note"}
-                          </button>
+                    {!notePreview && !isEditing && (
+                      <button
+                        type="button"
+                        className="btn-add-note-inline"
+                        onClick={() => beginEditingNotes(embedding)}
+                      >
+                        + Add note
+                      </button>
+                    )}
+
+                    {(isEditing || notePreview) && (
+                      <div className="embedding-notes">
+                        <div className="notes-header">
+                          <span>Notes</span>
+                          {!isEditing && (
+                            <button
+                              type="button"
+                              className="btn-add-note"
+                              onClick={() => beginEditingNotes(embedding)}
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
+
+                        {isEditing ? (
+                          <>
+                            <textarea
+                              id={noteId}
+                              className="notes-textarea"
+                              aria-label="Bookmark notes"
+                              placeholder="Add personal context or reminders..."
+                              value={draftNote}
+                              onChange={(event) =>
+                                handleNoteChange(
+                                  embedding.id,
+                                  event.target.value,
+                                )
+                              }
+                              rows={3}
+                            />
+                            <div className="notes-actions">
+                              <button
+                                type="button"
+                                className="btn-save-note"
+                                onClick={() => handleSaveNote(embedding)}
+                                disabled={
+                                  savingNotes[embedding.id] ||
+                                  !isNoteDirty(embedding)
+                                }
+                              >
+                                {savingNotes[embedding.id]
+                                  ? "Saving..."
+                                  : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-reset-note"
+                                onClick={() => cancelEditingNotes(embedding)}
+                                disabled={savingNotes[embedding.id]}
+                              >
+                                Cancel
+                              </button>
+                              {notePreview && (
+                                <button
+                                  type="button"
+                                  className="btn-delete-note-text"
+                                  onClick={() => handleDeleteNote(embedding)}
+                                  disabled={savingNotes[embedding.id]}
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="notes-preview">
+                            {truncateText(notePreview, 220)}
+                          </div>
                         )}
                       </div>
-
-                      {isEditing ? (
-                        <>
-                          <textarea
-                            id={noteId}
-                            className="notes-textarea"
-                            aria-label="Bookmark notes"
-                            placeholder="Add personal context or reminders..."
-                            value={draftNote}
-                            onChange={(event) =>
-                              handleNoteChange(embedding.id, event.target.value)
-                            }
-                            rows={3}
-                          />
-                          <div className="notes-actions">
-                            <button
-                              type="button"
-                              className="btn-save-note"
-                              onClick={() => handleSaveNote(embedding)}
-                              disabled={
-                                savingNotes[embedding.id] ||
-                                !isNoteDirty(embedding)
-                              }
-                            >
-                              {savingNotes[embedding.id] ? "Saving..." : "Save"}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-reset-note"
-                              onClick={() => cancelEditingNotes(embedding)}
-                              disabled={savingNotes[embedding.id]}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <div
-                          className={`notes-preview ${
-                            notePreview ? "" : "notes-empty"
-                          }`}
-                        >
-                          {notePreview
-                            ? truncateText(notePreview, 220)
-                            : "No notes yet"}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   <div className="embedding-footer">

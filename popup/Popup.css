@@ -875,7 +875,24 @@ textarea {
     gap: var(--spacing-sm);
     transition:
         box-shadow 0.2s ease,
-        transform 0.2s ease;
+        transform 0.2s ease,
+        background 0.3s ease,
+        border-color 0.3s ease;
+}
+
+.embedding-item-highlight {
+    animation: borderFlash 0.6s ease-out;
+}
+
+@keyframes borderFlash {
+    0%,
+    100% {
+        border-color: var(--border-light);
+    }
+    50% {
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+    }
 }
 
 .embedding-item:hover {
@@ -1008,6 +1025,29 @@ textarea {
     color: var(--accent-teal);
 }
 
+.btn-add-note-inline {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: var(--spacing-xs);
+}
+
+.btn-add-note-inline:hover {
+    background: var(--hover-bg);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.dark-mode .btn-add-note-inline:hover {
+    border-color: var(--accent-primary);
+}
+
 .embedding-notes {
     display: flex;
     flex-direction: column;
@@ -1020,6 +1060,48 @@ textarea {
     align-items: center;
     font-size: var(--font-size-sm);
     color: var(--text-secondary);
+}
+
+.notes-header-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    align-items: center;
+}
+
+.btn-delete-note {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: var(--font-size-sm);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.btn-delete-note:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.btn-delete-note-text {
+    background: transparent;
+    border: 1px solid var(--accent-danger);
+    color: var(--accent-danger);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-delete-note-text:hover:not(:disabled) {
+    background: var(--accent-danger);
+    color: white;
+}
+
+.btn-delete-note-text:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .notes-textarea {
@@ -1186,6 +1268,44 @@ textarea {
     display: flex;
     gap: 6px;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.metadata-chip {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 4px 8px;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.dark-mode .metadata-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-add-note-chip {
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    font-size: var(--font-size-xs);
+    padding: 4px 8px;
+}
+
+.btn-add-note-chip:hover {
+    background: var(--accent-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.dark-mode .btn-add-note-chip:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
 }
 
 .dark-mode .embedding-footer {

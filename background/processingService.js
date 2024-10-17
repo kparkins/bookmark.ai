@@ -7,7 +7,6 @@ const defaultProcessingState = () => ({
   isProcessing: false,
   total: 0,
   processed: 0,
-  currentIndex: 0,
   successCount: 0,
   skippedCount: 0,
   failedCount: 0,
@@ -28,23 +27,8 @@ function getStoredProcessingState() {
   });
 }
 
-function withTaskAliases(state) {
-  const snapshot = { ...state };
-
-  if (snapshot.activeTask === "import") {
-    snapshot.imported = snapshot.successCount;
-    snapshot.skipped = snapshot.skippedCount;
-    snapshot.failed = snapshot.failedCount;
-  } else if (snapshot.activeTask === "regeneration") {
-    snapshot.regenerated = snapshot.successCount;
-    snapshot.failed = snapshot.failedCount;
-  }
-
-  return snapshot;
-}
-
 async function broadcastProcessingState() {
-  const snapshot = withTaskAliases(processingState);
+  const snapshot = { ...processingState };
 
   try {
     await chrome.storage.local.set({ [PROCESSING_STORAGE_KEY]: snapshot });
@@ -67,7 +51,7 @@ async function finishProcessing(onComplete) {
   processingState.completedAt = Date.now();
   await broadcastProcessingState();
   processingJob = null;
-  onComplete?.({ ...withTaskAliases(processingState) });
+  onComplete?.({ ...processingState });
   await releaseKeepAlive();
 }
 
@@ -76,15 +60,12 @@ async function processNextBatch() {
     return;
   }
   const { items, processItem, batchSize, delay, onComplete } = processingJob;
-  if (
-    processingState.cancelled ||
-    processingState.currentIndex >= items.length
-  ) {
+  if (processingState.cancelled || processingState.processed >= items.length) {
     await finishProcessing(onComplete);
     return;
   }
 
-  const startIndex = processingState.currentIndex;
+  const startIndex = processingState.processed;
   const endIndex = Math.min(startIndex + batchSize, items.length);
 
   for (let index = startIndex; index < endIndex; index++) {
@@ -93,7 +74,6 @@ async function processNextBatch() {
     }
 
     const item = items[index];
-    processingState.currentIndex = index;
 
     try {
       const result = await processItem(item, index, { ...processingState });
@@ -115,13 +95,9 @@ async function processNextBatch() {
     }
 
     processingState.processed++;
-    processingState.currentIndex = index + 1;
   }
 
-  if (
-    processingState.cancelled ||
-    processingState.currentIndex >= items.length
-  ) {
+  if (processingState.cancelled || processingState.processed >= items.length) {
     await finishProcessing(onComplete);
     return;
   }
@@ -146,7 +122,6 @@ export async function startProcessing(task, items, processItem, options = {}) {
     isProcessing: items.length > 0,
     startedAt: items.length > 0 ? Date.now() : null,
   };
-  processingState.currentIndex = 0;
 
   processingJob = {
     items,
@@ -193,13 +168,13 @@ export function isProcessing(task) {
 
 export function getProcessingState(task) {
   if (!task || processingState.activeTask === task) {
-    return withTaskAliases(processingState);
+    return { ...processingState };
   }
 
-  return withTaskAliases({
+  return {
     ...defaultProcessingState(),
     activeTask: task,
-  });
+  };
 }
 
 export async function failProcessing(message) {

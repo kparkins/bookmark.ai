@@ -8,22 +8,20 @@ const TASK_DESCRIPTORS = {
     running: (progress, percentage) =>
       `Importing bookmarks... ${progress.processed}/${progress.total} (${percentage}%)`,
     finished: (progress) => {
-      const imported = progress.imported || 0;
-      const skipped = progress.skipped || 0;
-      const failed = progress.failed || 0;
+      const imported = progress.successCount || 0;
+      const skipped = progress.skippedCount || 0;
+      const failed = progress.failedCount || 0;
       return progress.cancelled
         ? `Import cancelled. ${imported} imported, ${skipped} skipped, ${failed} failed`
         : `Import complete! ${imported} imported, ${skipped} skipped, ${failed} failed`;
     },
     detail: (progress) => {
-      const imported = progress.imported || 0;
-      const skipped = progress.skipped || 0;
-      const failed = progress.failed || 0;
+      const failed = progress.failedCount || 0;
       return `${progress.processed} / ${progress.total} bookmarks (${failed} failed)`;
     },
     cancelAction: "cancelImport",
     cancelMessage: "Cancelling import...",
-    shouldReload: (progress) => (progress.imported || 0) > 0,
+    shouldReload: (progress) => (progress.successCount || 0) > 0,
   },
   regeneration: {
     icon: "🛠️",
@@ -32,20 +30,20 @@ const TASK_DESCRIPTORS = {
     running: (progress, percentage) =>
       `Re-generating embeddings... ${progress.processed}/${progress.total} (${percentage}%)`,
     finished: (progress) => {
-      const regenerated = progress.regenerated || 0;
-      const failed = progress.failed || 0;
+      const regenerated = progress.successCount || 0;
+      const failed = progress.failedCount || 0;
       return progress.cancelled
         ? `Regeneration cancelled. ${regenerated} regenerated, ${failed} failed`
         : `Regeneration complete! ${regenerated} regenerated, ${failed} failed`;
     },
     detail: (progress) => {
-      const regenerated = progress.regenerated || 0;
-      const failed = progress.failed || 0;
+      const regenerated = progress.successCount || 0;
+      const failed = progress.failedCount || 0;
       return `${progress.processed} / ${progress.total} embeddings (${failed} failed)`;
     },
     cancelAction: "cancelRegeneration",
     cancelMessage: "Cancelling regeneration...",
-    shouldReload: (progress) => (progress.regenerated || 0) > 0,
+    shouldReload: (progress) => (progress.successCount || 0) > 0,
   },
 };
 
@@ -81,6 +79,7 @@ export function useProcessing(loadEmbeddings, showStatus) {
   const [progress, setProgress] = useState(null);
   const lastStatusKey = useRef(null);
   const lastCompletion = useRef(null);
+  const hasSeenInitialState = useRef(false);
 
   useEffect(() => {
     const handleProgressUpdate = (incoming) => {
@@ -134,6 +133,20 @@ export function useProcessing(loadEmbeddings, showStatus) {
 
   useEffect(() => {
     if (!progress) {
+      return;
+    }
+
+    // On first load, just mark initial state as seen without showing notifications
+    if (!hasSeenInitialState.current) {
+      hasSeenInitialState.current = true;
+      if (!progress.isProcessing && progress.completedAt) {
+        // Store the completion timestamp so we don't show it again
+        lastCompletion.current = progress.completedAt;
+        const summary = summarizeProgress(progress);
+        if (summary) {
+          lastStatusKey.current = `${summary.type}:${summary.text}`;
+        }
+      }
       return;
     }
 

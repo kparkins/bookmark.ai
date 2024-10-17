@@ -43,7 +43,6 @@ function SearchTab() {
     }
 
     setSearching(true);
-    showStatus("Searching...", "loading");
 
     try {
       const limit =
@@ -59,10 +58,6 @@ function SearchTab() {
 
       if (response.success) {
         setSearchResults(response.results);
-        showStatus(
-          `Found ${response.results.length} similar embeddings`,
-          "success",
-        );
       } else {
         showStatus(`Search error: ${response.error}`, "error");
       }

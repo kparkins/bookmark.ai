@@ -64,6 +64,8 @@ export function useEmbeddings(autoImport = false) {
 
   // Listen for processing progress updates and reload when items are imported
   useEffect(() => {
+    let isLoadingEmbeddings = false;
+
     const handleProgressUpdate = (progress) => {
       if (!progress?.activeTask) {
         return;
@@ -71,17 +73,19 @@ export function useEmbeddings(autoImport = false) {
 
       // For import task, reload embeddings when new items are processed
       if (progress.activeTask === "import" && progress.isProcessing) {
-        const currentProcessed = progress.processed || 0;
-        const currentSuccessCount =
-          progress.imported || progress.successCount || 0;
+        const currentSuccessCount = progress.successCount || 0;
 
         // Reload if we've successfully imported at least one item and the count increased
         if (
           currentSuccessCount > lastProcessedCount.current &&
-          currentSuccessCount > 0
+          currentSuccessCount > 0 &&
+          !isLoadingEmbeddings
         ) {
           lastProcessedCount.current = currentSuccessCount;
-          loadEmbeddings();
+          isLoadingEmbeddings = true;
+          loadEmbeddings().finally(() => {
+            isLoadingEmbeddings = false;
+          });
         }
       }
 
@@ -91,23 +95,17 @@ export function useEmbeddings(autoImport = false) {
       }
     };
 
-    const messageListener = (message) => {
-      if (message?.action === "processingProgress") {
-        handleProgressUpdate(message.progress);
-      }
-    };
-
+    // Only listen to storage changes to avoid duplicate updates
+    // (processingService broadcasts to both storage and messages)
     const storageListener = (changes, areaName) => {
       if (areaName === "local" && changes.processingState) {
         handleProgressUpdate(changes.processingState.newValue);
       }
     };
 
-    chrome.runtime.onMessage.addListener(messageListener);
     chrome.storage.onChanged.addListener(storageListener);
 
     return () => {
-      chrome.runtime.onMessage.removeListener(messageListener);
       chrome.storage.onChanged.removeListener(storageListener);
     };
   }, []);
