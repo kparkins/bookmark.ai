@@ -308,6 +308,132 @@ async function importAllBookmarks() {
   }
 }
 
+// Process a single bookmark and create embedding
+async function processBookmark(bookmark, bookmarkId) {
+  try {
+    // Create text from bookmark
+    const text = `${bookmark.title} - ${bookmark.url}`;
+
+    // Generate embedding
+    const result = await generateEmbedding(text);
+
+    if (result.success) {
+      // Store with metadata
+      await embeddingDB.add({
+        text: text,
+        embedding: result.embedding,
+        dimensions: result.dimensions,
+        timestamp: result.timestamp,
+        metadata: {
+          type: "bookmark",
+          url: bookmark.url,
+          title: bookmark.title,
+          bookmarkId: bookmarkId,
+          dateAdded: bookmark.dateAdded || Date.now(),
+        },
+      });
+
+      console.log(`Embedding created for bookmark: ${bookmark.title}`);
+      return { success: true };
+    } else {
+      console.error(`Failed to generate embedding for: ${bookmark.title}`);
+      return { success: false, error: result.error };
+    }
+  } catch (error) {
+    console.error(`Error processing bookmark ${bookmark.title}:`, error);
+    return { success: false, error: error.message };
+  }
+}
+
+// Listen for new bookmarks being created
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
+  console.log("New bookmark detected:", bookmark);
+
+  // Only process if it's a bookmark (has a URL), not a folder
+  if (bookmark.url) {
+    const result = await processBookmark(bookmark, id);
+
+    if (result.success) {
+      // Optional: Show a subtle notification
+      try {
+        await chrome.notifications.create({
+          type: "basic",
+          iconUrl: "icons/icon48.png",
+          title: "Bookmark Indexed",
+          message: `"${bookmark.title}" has been indexed for search`,
+          silent: true,
+        });
+      } catch (error) {
+        // Notifications might not be available, that's okay
+        console.log("Could not show notification:", error);
+      }
+    }
+  }
+});
+
+// Listen for bookmark updates
+chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
+  console.log("Bookmark updated:", id, changeInfo);
+
+  try {
+    // Get the full bookmark data
+    const bookmarks = await chrome.bookmarks.get(id);
+    const bookmark = bookmarks[0];
+
+    if (bookmark.url) {
+      // Find existing embedding for this bookmark
+      const existing = await embeddingDB.getAll();
+      const existingEmbedding = existing.find(
+        (e) => e.metadata?.bookmarkId === id,
+      );
+
+      if (existingEmbedding) {
+        // Update the existing embedding
+        const text = `${bookmark.title} - ${bookmark.url}`;
+        const result = await generateEmbedding(text);
+
+        if (result.success) {
+          await embeddingDB.update(existingEmbedding.id, {
+            text: text,
+            embedding: result.embedding,
+            metadata: {
+              ...existingEmbedding.metadata,
+              title: bookmark.title,
+              url: bookmark.url,
+            },
+          });
+          console.log(`Embedding updated for: ${bookmark.title}`);
+        }
+      } else {
+        // No existing embedding, create one
+        await processBookmark(bookmark, id);
+      }
+    }
+  } catch (error) {
+    console.error("Error updating bookmark embedding:", error);
+  }
+});
+
+// Listen for bookmark deletions and clean up embeddings
+chrome.bookmarks.onRemoved.addListener(async (id, removeInfo) => {
+  console.log("Bookmark removed:", id);
+
+  try {
+    // Find and delete the corresponding embedding
+    const existing = await embeddingDB.getAll();
+    const embeddingToDelete = existing.find(
+      (e) => e.metadata?.bookmarkId === id,
+    );
+
+    if (embeddingToDelete) {
+      await embeddingDB.delete(embeddingToDelete.id);
+      console.log(`Embedding deleted for bookmark: ${id}`);
+    }
+  } catch (error) {
+    console.error("Error deleting bookmark embedding:", error);
+  }
+});
+
 // Context menu for selected text
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Text Embedding Generator",
+  "name": "bookmark.ai",
   "version": "1.0.0",
   "description": "Generate text embeddings locally using Transformers.js",
   "permissions": ["storage", "activeTab", "contextMenus", "bookmarks"],

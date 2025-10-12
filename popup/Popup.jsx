@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import "./Popup.css";
 
 function Popup() {
+  const [autoImport, setAutoImport] = useState(false);
   const [activeTab, setActiveTab] = useState("search");
   const [text, setText] = useState("");
   const [status, setStatus] = useState({ message: "", type: "" });
@@ -21,12 +22,6 @@ function Popup() {
         setStatus({ message: "", type: "" });
       }, 3000);
     }
-  };
-
-  // Format timestamp
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
   };
 
   // Truncate text for display
@@ -244,6 +239,7 @@ function Popup() {
   // Import all bookmarks
   const importBookmarks = async () => {
     if (
+      !autoImport &&
       !window.confirm(
         "This will import all your browser bookmarks and create embeddings for them. This may take a while if you have many bookmarks. Continue?",
       )
@@ -287,6 +283,9 @@ function Popup() {
   // Load embeddings on mount
   useEffect(() => {
     loadEmbeddings();
+    if (autoImport) {
+      importBookmarks();
+    }
   }, []);
 
   // Debounced search as user types
@@ -327,7 +326,13 @@ function Popup() {
           className={`tab ${activeTab === "import" ? "active" : ""}`}
           onClick={() => setActiveTab("import")}
         >
-          📥 Import & Export
+          📥 Import
+        </button>
+        <button
+          className={`tab ${activeTab === "settings" ? "active" : ""}`}
+          onClick={() => setActiveTab("settings")}
+        >
+          ⚙ Settings
         </button>
       </div>
       {status.message && (
