@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Generator</title>
+</head>
+<body>
+  <h1>Icon Generator</h1>
+  <p>Open this file in a browser and it will generate the icon files.</p>
+  <canvas id="canvas" style="border: 1px solid black;"></canvas>
+  <script>
+    const sizes = [16, 48, 128];
+
+    function createIcon(size) {
+      const canvas = document.getElementById('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#4285f4';
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, size * 0.1875);
+      ctx.fill();
+
+      // Scale factor
+      const scale = size / 128;
+      const offset = size * 0.1875;
+
+      // Draw neural network nodes
+      const nodes = [
+        [15, 15], [45, 10], [65, 15],
+        [25, 35], [55, 35],
+        [15, 55], [45, 50], [65, 55]
+      ];
+
+      const connections = [
+        [0, 1], [1, 2], [0, 3], [1, 3], [1, 4], [2, 4],
+        [3, 5], [3, 6], [4, 6], [4, 7], [6, 7]
+      ];
+
+      // Draw connections
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2 * scale;
+      connections.forEach(([i, j]) => {
+        ctx.beginPath();
+        ctx.moveTo(nodes[i][0] * scale + offset, nodes[i][1] * scale + offset);
+        ctx.lineTo(nodes[j][0] * scale + offset, nodes[j][1] * scale + offset);
+        ctx.stroke();
+      });
+
+      // Draw nodes
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      nodes.forEach(([x, y]) => {
+        ctx.beginPath();
+        ctx.arc(x * scale + offset, y * scale + offset, 6 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Download
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `icon${size}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // Generate all sizes
+    setTimeout(() => {
+      sizes.forEach((size, index) => {
+        setTimeout(() => createIcon(size), index * 1000);
+      });
+    }, 1000);
+  </script>
+</body>
+</html>
