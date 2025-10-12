@@ -7,17 +7,46 @@ env.useBrowserCache = true;
 env.backends.onnx.wasm.numThreads = 1; // Use single thread for stability
 
 let embeddingPipeline = null;
+let currentModel = "Xenova/all-MiniLM-L6-v2"; // Default model
+
+// Get the selected model from storage
+async function getSelectedModel() {
+  try {
+    const result = await chrome.storage.local.get(["embeddingModel"]);
+    return result.embeddingModel || "Xenova/all-MiniLM-L6-v2";
+  } catch (error) {
+    console.error("Error getting selected model:", error);
+    return "Xenova/all-MiniLM-L6-v2";
+  }
+}
 
 // Initialize the embedding model
-async function initializeModel() {
+async function initializeModel(forceReload = false) {
+  const selectedModel = await getSelectedModel();
+
+  // If model changed, clear the existing pipeline
+  if (selectedModel !== currentModel || forceReload) {
+    console.log(`Model changed from ${currentModel} to ${selectedModel}`);
+    embeddingPipeline = null;
+    currentModel = selectedModel;
+  }
+
   if (!embeddingPipeline) {
-    console.log("Loading embedding model...");
-    // Using a lightweight sentence transformer model
-    embeddingPipeline = await pipeline(
-      "feature-extraction",
-      "Xenova/all-MiniLM-L6-v2",
-    );
-    console.log("Model loaded successfully");
+    console.log(`Loading embedding model: ${currentModel}...`);
+    try {
+      embeddingPipeline = await pipeline("feature-extraction", currentModel);
+      console.log("Model loaded successfully");
+    } catch (error) {
+      console.error(`Error loading model ${currentModel}:`, error);
+      // Fallback to default model
+      if (currentModel !== "Xenova/all-MiniLM-L6-v2") {
+        console.log("Falling back to default model...");
+        currentModel = "Xenova/all-MiniLM-L6-v2";
+        embeddingPipeline = await pipeline("feature-extraction", currentModel);
+      } else {
+        throw error;
+      }
+    }
   }
   return embeddingPipeline;
 }
@@ -35,6 +64,7 @@ async function generateEmbedding(text) {
       success: true,
       embedding: embedding,
       dimensions: embedding.length,
+      model: await getSelectedModel(),
       text: text,
       timestamp: Date.now(),
     };
@@ -188,6 +218,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     return true;
   }
+
+  if (request.action === "changeModel") {
+    // Force reload the model with the new selection
+    initializeModel(true)
+      .then(() => {
+        sendResponse({
+          success: true,
+          message: `Model changed to ${request.model}`,
+        });
+      })
+      .catch((error) => {
+        sendResponse({
+          success: false,
+          error: error.message,
+        });
+      });
+    return true;
+  }
+
+  if (request.action === "getCurrentModel") {
+    sendResponse({
+      success: true,
+      model: currentModel,
+    });
+    return true;
+  }
+
+  if (request.action === "regenerateAllEmbeddings") {
+    regenerateAllEmbeddings()
+      .then((result) => {
+        sendResponse(result);
+      })
+      .catch((error) => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
 });
 
 // Get all bookmarks recursively
@@ -214,6 +281,79 @@ async function getAllBookmarks() {
 
   traverse(bookmarkTreeNodes);
   return bookmarks;
+}
+
+// Re-generate all existing embeddings with the current model
+async function regenerateAllEmbeddings() {
+  try {
+    console.log("Starting embeddings regeneration...");
+
+    // Get all existing embeddings
+    const existingEmbeddings = await embeddingDB.getAll();
+    console.log(`Found ${existingEmbeddings.length} embeddings to regenerate`);
+
+    if (existingEmbeddings.length === 0) {
+      return {
+        success: true,
+        message: "No embeddings to regenerate",
+        regenerated: 0,
+        failed: 0,
+      };
+    }
+
+    let regenerated = 0;
+    let failed = 0;
+
+    // Force reload the model to ensure we're using the latest selected model
+    await initializeModel(true);
+
+    // Process each embedding
+    for (const embedding of existingEmbeddings) {
+      try {
+        // Generate new embedding with the current model
+        const result = await generateEmbedding(embedding.text);
+
+        if (result.success) {
+          // Update the existing embedding with new vector
+          await embeddingDB.update(embedding.id, {
+            embedding: result.embedding,
+            dimensions: result.dimensions,
+            model: result.model,
+            timestamp: Date.now(),
+          });
+          regenerated++;
+          console.log(`Regenerated: ${embedding.text.substring(0, 50)}...`);
+        } else {
+          failed++;
+          console.error(
+            `Failed to regenerate embedding: ${embedding.text.substring(0, 50)}...`,
+          );
+        }
+
+        // Small delay to prevent overwhelming the model
+        if (regenerated % 10 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        failed++;
+        console.error(`Error regenerating embedding ${embedding.id}:`, error);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Regeneration complete! ${regenerated} regenerated, ${failed} failed`,
+      regenerated,
+      failed,
+      total: existingEmbeddings.length,
+    };
+  } catch (error) {
+    console.error("Error regenerating embeddings:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 }
 
 // Import all bookmarks and create embeddings

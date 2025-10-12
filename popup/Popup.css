@@ -502,3 +502,194 @@ button {
     background: #ccc;
     cursor: not-allowed;
 }
+
+/* Settings Section */
+.settings-section {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.settings-section h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.settings-description {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.model-selection {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.model-option {
+    border-bottom: 1px solid #eee;
+}
+
+.model-option:last-child {
+    border-bottom: none;
+}
+
+.model-label {
+    display: flex;
+    align-items: flex-start;
+    padding: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.model-label:hover {
+    background-color: #f8f9fa;
+}
+
+.model-label input[type="radio"] {
+    margin-top: 2px;
+    margin-right: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.model-info {
+    flex: 1;
+}
+
+.model-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.model-description {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.3;
+}
+
+.custom-model-input {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.custom-model-input label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.custom-model-input input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family:
+        "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
+        "Courier New", monospace;
+    margin-bottom: 8px;
+}
+
+.custom-model-input input[type="text"]:focus {
+    outline: none;
+    border-color: #4285f4;
+}
+
+.custom-model-input small {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.4;
+    display: block;
+}
+
+.settings-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.btn-settings {
+    width: 100%;
+    padding: 12px 16px;
+    background: #4285f4;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-settings:hover {
+    background: #3367d6;
+}
+
+.btn-settings:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.btn-regenerate {
+    width: 100%;
+    padding: 12px 16px;
+    background: #ff6b6b;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-regenerate:hover {
+    background: #ee5a5a;
+}
+
+.btn-regenerate:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.regeneration-progress {
+    background: #e3f2fd;
+    border: 1px solid #2196f3;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.progress-text {
+    font-size: 13px;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.settings-note {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    color: #856404;
+    line-height: 1.5;
+}
+
+.settings-note strong {
+    font-weight: 600;
+}
