@@ -138,6 +138,14 @@ function Popup() {
     setSearchResults(null);
   };
 
+  // Handle click on search result
+  const handleResultClick = (result) => {
+    // Check if this result has a URL in metadata
+    if (result.metadata?.url) {
+      chrome.tabs.create({ url: result.metadata.url });
+    }
+  };
+
   // Delete embedding
   const deleteEmbedding = async (id) => {
     try {
@@ -281,10 +289,27 @@ function Popup() {
     loadEmbeddings();
   }, []);
 
+  // Debounced search as user types
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    if (embeddings.length === 0) {
+      return;
+    }
+
+    // Debounce: wait 500ms after user stops typing
+    const timeoutId = setTimeout(() => {
+      searchEmbeddings();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, embeddings.length]);
+
   return (
     <main>
-      <h1>Text Embedding Generator</h1>
-
       <div className="tabs">
         <button
           className={`tab ${activeTab === "search" ? "active" : ""}`}
@@ -305,11 +330,9 @@ function Popup() {
           📥 Import & Export
         </button>
       </div>
-
       {status.message && (
         <div className={`status ${status.type}`}>{status.message}</div>
       )}
-
       {activeTab === "generate" && (
         <div className="tab-content">
           <div className="input-section">
@@ -335,32 +358,18 @@ function Popup() {
           </div>
         </div>
       )}
-
       {activeTab === "search" && (
         <div className="tab-content">
           <div className="search-section">
-            <h2>Semantic Search</h2>
+            <h2>Search</h2>
             <div className="search-input-group">
               <input
                 type="text"
                 className="search-input"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    searchEmbeddings();
-                  }
-                }}
-                placeholder="Search by meaning..."
+                placeholder="Search by meaning (type to search)..."
               />
-              <button
-                className="btn-search"
-                onClick={searchEmbeddings}
-                disabled={searching}
-              >
-                🔍 Search
-              </button>
               {searchResults && (
                 <button className="btn-clear-search" onClick={clearSearch}>
                   Clear
@@ -370,29 +379,37 @@ function Popup() {
 
             {searchResults && searchResults.length > 0 && (
               <div className="search-results">
-                <h3>Search Results (by similarity)</h3>
+                <h3>Results (by similarity)</h3>
                 {searchResults.map((result) => (
                   <div key={result.id} className="search-result-item">
                     <div className="result-header">
                       <span className="similarity-score">
                         {(result.similarity * 100).toFixed(1)}% match
                       </span>
+                      {result.metadata?.url && (
+                        <span className="result-type">🔖 Bookmark</span>
+                      )}
                     </div>
-                    <div className="embedding-text">
+                    <div
+                      className={`embedding-text ${result.metadata?.url ? "clickable" : ""}`}
+                      onClick={() => handleResultClick(result)}
+                      style={result.metadata?.url ? { cursor: "pointer" } : {}}
+                    >
                       {truncateText(result.text)}
                     </div>
-                    <div className="embedding-meta">
-                      <div className="embedding-info">
-                        <span>Dims: {result.dimensions}</span>
-                        <span>{formatTimestamp(result.timestamp)}</span>
-                      </div>
-                      <button
-                        className="btn-delete"
-                        onClick={() => deleteEmbedding(result.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {/* {result.metadata?.url && (
+                      <div className="result-url">{result.metadata.url}</div>
+                    )}*/}
+                    <button
+                      className="btn-delete-icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteEmbedding(result.id);
+                      }}
+                      title="Delete"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 ))}
               </div>
@@ -404,7 +421,6 @@ function Popup() {
           </div>
         </div>
       )}
-
       {activeTab === "library" && (
         <div className="tab-content">
           <div className="embeddings-section">
@@ -419,21 +435,34 @@ function Popup() {
               ) : (
                 embeddings.map((embedding) => (
                   <div key={embedding.id} className="embedding-item">
-                    <div className="embedding-text">
+                    <div className="result-header">
+                      {embedding.metadata?.url ? (
+                        <span className="result-type">🧠 Embedding</span>
+                      ) : (
+                        <span className="result-type result-type-embedding">
+                          🧠 Embedding
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className={`embedding-text ${embedding.metadata?.url ? "clickable" : ""}`}
+                      onClick={() => handleResultClick(embedding)}
+                      style={
+                        embedding.metadata?.url ? { cursor: "pointer" } : {}
+                      }
+                    >
                       {truncateText(embedding.text)}
                     </div>
-                    <div className="embedding-meta">
-                      <div className="embedding-info">
-                        <span>Dims: {embedding.dimensions}</span>
-                        <span>{formatTimestamp(embedding.timestamp)}</span>
-                      </div>
-                      <button
-                        className="btn-delete"
-                        onClick={() => deleteEmbedding(embedding.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <button
+                      className="btn-delete-icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteEmbedding(embedding.id);
+                      }}
+                      title="Delete"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 ))
               )}
@@ -447,7 +476,6 @@ function Popup() {
           </div>
         </div>
       )}
-
       {activeTab === "import" && (
         <div className="tab-content">
           <div className="backup-section">
