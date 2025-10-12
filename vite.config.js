@@ -10,13 +10,14 @@ const __dirname = dirname(__filename);
 export default defineConfig({
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 1000, // Background worker with Transformers.js is ~870 KB
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "popup/popup.html"),
+        background: resolve(__dirname, "background/background.js"),
       },
       output: {
-        entryFileNames: "popup/[name].js",
-        chunkFileNames: "popup/[name].js",
+        entryFileNames: "[name]/[name].js",
         assetFileNames: (assetInfo) => {
           if (assetInfo.name.endsWith(".css")) {
             return "popup/[name].[ext]";

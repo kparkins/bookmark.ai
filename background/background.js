@@ -1,7 +1,4 @@
-import {
-  pipeline,
-  env,
-} from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+import { pipeline, env } from "@huggingface/transformers";
 import { embeddingDB } from "../lib/db.js";
 
 // Configure transformers.js to run locally

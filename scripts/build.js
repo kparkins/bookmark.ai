@@ -32,19 +32,8 @@ try {
   console.error("❌ Failed to copy manifest:", error.message);
 }
 
-// Copy background scripts
-const backgroundFiles = [
-  { src: "background/background.js", dest: "dist/background/background.js" },
-];
-
-backgroundFiles.forEach(({ src, dest }) => {
-  try {
-    copyFileSync(src, dest);
-    console.log(`✅ Copied ${src} → ${dest}`);
-  } catch (error) {
-    console.error(`❌ Failed to copy ${src}:`, error.message);
-  }
-});
+// Background worker is now bundled by Vite, so we don't copy it manually
+// Vite will output it to dist/background/background.js
 
 // Copy library files
 const libFiles = [
