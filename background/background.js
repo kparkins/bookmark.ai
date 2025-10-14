@@ -99,161 +99,159 @@ async function storeEmbedding(embeddingData) {
 
 // Message listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "generateEmbedding") {
-    generateEmbedding(request.text)
-      .then((result) => {
-        if (result.success && request.store) {
-          return storeEmbedding(result);
-        }
-        return result;
-      })
-      .then(sendResponse);
-    return true; // Keep channel open for async response
-  }
+  switch (request.action) {
+    case "generateEmbedding":
+      generateEmbedding(request.text)
+        .then((result) => {
+          if (result.success && request.store) {
+            return storeEmbedding(result);
+          }
+          return result;
+        })
+        .then(sendResponse);
+      return true; // Keep channel open for async response
 
-  if (request.action === "getEmbeddings") {
-    embeddingDB
-      .getAllSorted()
-      .then((embeddings) => {
-        sendResponse({
-          success: true,
-          embeddings: embeddings,
+    case "getEmbeddings":
+      embeddingDB
+        .getAllSorted()
+        .then((embeddings) => {
+          sendResponse({
+            success: true,
+            embeddings: embeddings,
+          });
+        })
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error.message,
+          });
         });
-      })
-      .catch((error) => {
-        sendResponse({
-          success: false,
-          error: error.message,
+      return true;
+
+    case "deleteEmbedding":
+      embeddingDB
+        .delete(request.id)
+        .then(() => {
+          sendResponse({ success: true });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
         });
-      });
-    return true;
-  }
+      return true;
 
-  if (request.action === "deleteEmbedding") {
-    embeddingDB
-      .delete(request.id)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "clearAllEmbeddings") {
-    embeddingDB
-      .clear()
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "exportEmbeddings") {
-    embeddingDB
-      .exportJSON()
-      .then((json) => {
-        sendResponse({ success: true, data: json });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "importEmbeddings") {
-    embeddingDB
-      .importJSON(request.data)
-      .then((count) => {
-        sendResponse({ success: true, count: count });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "getStats") {
-    embeddingDB
-      .getStats()
-      .then((stats) => {
-        sendResponse({ success: true, stats: stats });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "searchEmbeddings") {
-    // Generate embedding for search query, then find similar ones
-    generateEmbedding(request.query)
-      .then((result) => {
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        // Search for similar embeddings
-        return embeddingDB.search(result.embedding, request.topK || 5);
-      })
-      .then((results) => {
-        sendResponse({ success: true, results: results });
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "importBookmarks") {
-    importAllBookmarks()
-      .then((result) => {
-        sendResponse(result);
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-
-  if (request.action === "changeModel") {
-    // Force reload the model with the new selection
-    initializeModel(true)
-      .then(() => {
-        sendResponse({
-          success: true,
-          message: `Model changed to ${request.model}`,
+    case "clearAllEmbeddings":
+      embeddingDB
+        .clear()
+        .then(() => {
+          sendResponse({ success: true });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
         });
-      })
-      .catch((error) => {
-        sendResponse({
-          success: false,
-          error: error.message,
+      return true;
+
+    case "exportEmbeddings":
+      embeddingDB
+        .exportJSON()
+        .then((json) => {
+          sendResponse({ success: true, data: json });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
         });
-      });
-    return true;
-  }
+      return true;
 
-  if (request.action === "getCurrentModel") {
-    sendResponse({
-      success: true,
-      model: currentModel,
-    });
-    return true;
-  }
+    case "importEmbeddings":
+      embeddingDB
+        .importJSON(request.data)
+        .then((count) => {
+          sendResponse({ success: true, count: count });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
 
-  if (request.action === "regenerateAllEmbeddings") {
-    regenerateAllEmbeddings()
-      .then((result) => {
-        sendResponse(result);
-      })
-      .catch((error) => {
-        sendResponse({ success: false, error: error.message });
+    case "getStats":
+      embeddingDB
+        .getStats()
+        .then((stats) => {
+          sendResponse({ success: true, stats: stats });
+        })
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error.message,
+          });
+        });
+      return true;
+
+    case "searchEmbeddings":
+      // Generate embedding for search query, then find similar ones
+      generateEmbedding(request.query)
+        .then((result) => {
+          if (!result.success) {
+            throw new Error(result.error);
+          }
+          // Search for similar embeddings
+          return embeddingDB.search(result.embedding, request.topK || 5);
+        })
+        .then((results) => {
+          sendResponse({ success: true, results: results });
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case "importBookmarks":
+      importAllBookmarks()
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case "changeModel":
+      // Force reload the model with the new selection
+      initializeModel(true)
+        .then(() => {
+          sendResponse({
+            success: true,
+            message: `Model changed to ${request.model}`,
+          });
+        })
+        .catch((error) => {
+          sendResponse({
+            success: false,
+            error: error.message,
+          });
+        });
+      return true;
+
+    case "getCurrentModel":
+      sendResponse({
+        success: true,
+        model: currentModel,
       });
-    return true;
+      return true;
+
+    case "regenerateAllEmbeddings":
+      regenerateAllEmbeddings()
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    default:
+      // Unknown action
+      console.warn(`Unknown action: ${request.action}`);
+      return false;
   }
 });
 
@@ -407,6 +405,7 @@ async function importAllBookmarks() {
             embedding: result.embedding,
             dimensions: result.dimensions,
             timestamp: result.timestamp,
+            model: result.model,
             metadata: {
               type: "bookmark",
               url: bookmark.url,
