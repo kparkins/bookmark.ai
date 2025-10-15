@@ -204,8 +204,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       return true;
 
-    case "importBookmarks":
-      importAllBookmarks()
+    case "startBatchImport":
+      startBatchImport(request.batchSize || 25)
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case "getImportProgress":
+      sendResponse(getImportProgress());
+      return true;
+
+    case "cancelImport":
+      cancelImport()
         .then((result) => {
           sendResponse(result);
         })
@@ -354,10 +368,149 @@ async function regenerateAllEmbeddings() {
   }
 }
 
-// Import all bookmarks and create embeddings
-async function importAllBookmarks() {
+// Import state tracking
+let importState = {
+  isImporting: false,
+  total: 0,
+  processed: 0,
+  imported: 0,
+  skipped: 0,
+  failed: 0,
+  currentBookmarkIndex: 0,
+  cancelled: false,
+  error: null,
+};
+
+// Broadcast import progress to all listeners
+async function broadcastImportProgress() {
+  // Save to storage (triggers storage change listeners)
+  await chrome.storage.local.set({ importState });
+
+  // Also send direct message to any open popups
   try {
-    console.log("Starting bookmark import...");
+    chrome.runtime.sendMessage({
+      action: "importProgress",
+      progress: { ...importState },
+    });
+  } catch (error) {
+    // Popup might not be open, that's okay
+    console.log("No popup to receive message");
+  }
+}
+
+// Load import state from storage
+async function loadImportState() {
+  try {
+    const result = await chrome.storage.local.get(["importState"]);
+    if (result.importState) {
+      importState = { ...importState, ...result.importState };
+    }
+  } catch (error) {
+    console.error("Error loading import state:", error);
+  }
+}
+
+// Reset import state
+async function resetImportState() {
+  importState = {
+    isImporting: false,
+    total: 0,
+    processed: 0,
+    imported: 0,
+    skipped: 0,
+    failed: 0,
+    currentBookmarkIndex: 0,
+    cancelled: false,
+    error: null,
+  };
+  await broadcastImportProgress();
+}
+
+// Process bookmarks in batches
+async function processBatchImport(bookmarks, existingUrls, batchSize = 25) {
+  // Check if we're already done or cancelled before processing
+  if (
+    importState.currentBookmarkIndex >= bookmarks.length ||
+    importState.cancelled
+  ) {
+    importState.isImporting = false;
+    await broadcastImportProgress();
+    return;
+  }
+
+  const startIndex = importState.currentBookmarkIndex;
+  const endIndex = Math.min(startIndex + batchSize, bookmarks.length);
+
+  for (let i = startIndex; i < endIndex; i++) {
+    // Check if import was cancelled
+    if (importState.cancelled) {
+      console.log("Import cancelled by user");
+      break;
+    }
+
+    const bookmark = bookmarks[i];
+    importState.currentBookmarkIndex = i + 1;
+    importState.processed++;
+
+    try {
+      // Skip if we already have an embedding for this URL
+      if (existingUrls.has(bookmark.url)) {
+        importState.skipped++;
+        continue;
+      }
+
+      // Create text from bookmark
+      const text = `${bookmark.title} - ${bookmark.url}`;
+
+      // Generate embedding
+      const result = await generateEmbedding(text);
+
+      if (!result.success) {
+        importState.failed++;
+        console.error(`Failed to generate embedding for: ${bookmark.title}`);
+        continue;
+      }
+      // Store with metadata
+      await embeddingDB.add({
+        text: text,
+        embedding: result.embedding,
+        dimensions: result.dimensions,
+        timestamp: result.timestamp,
+        model: result.model,
+        metadata: {
+          type: "bookmark",
+          url: bookmark.url,
+          title: bookmark.title,
+          dateAdded: bookmark.dateAdded,
+        },
+      });
+      importState.imported++;
+      console.log(`Imported: ${bookmark.title}`);
+    } catch (error) {
+      importState.failed++;
+      console.error(`Error processing bookmark ${bookmark.title}:`, error);
+    }
+  }
+  // Broadcast progress after each batch
+  await broadcastImportProgress();
+
+  // Continue with next batch
+  setTimeout(() => processBatchImport(bookmarks, existingUrls, batchSize), 100);
+}
+
+// Start batch import
+async function startBatchImport(batchSize = 25) {
+  try {
+    console.log("Starting batch bookmark import...");
+
+    // Check if already importing
+    if (importState.isImporting) {
+      console.log("Import already in progress");
+      return {
+        success: false,
+        error: "Import already in progress",
+      };
+    }
 
     // Get all bookmarks
     const bookmarks = await getAllBookmarks();
@@ -373,78 +526,58 @@ async function importAllBookmarks() {
       };
     }
 
-    let imported = 0;
-    let skipped = 0;
-    let failed = 0;
-
+    importState = {
+      isImporting: true,
+      total: bookmarks.length,
+      processed: 0,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      currentBookmarkIndex: 0,
+      cancelled: false,
+      error: null,
+    };
     // Get existing embeddings to avoid duplicates
     const existing = await embeddingDB.getAll();
     const existingUrls = new Set(
       existing.map((e) => e.metadata?.url).filter(Boolean),
     );
-
-    // Process bookmarks in batches to avoid overwhelming the system
-    for (const bookmark of bookmarks) {
-      try {
-        // Skip if we already have an embedding for this URL
-        if (existingUrls.has(bookmark.url)) {
-          skipped++;
-          continue;
-        }
-
-        // Create text from bookmark
-        const text = `${bookmark.title} - ${bookmark.url}`;
-
-        // Generate embedding
-        const result = await generateEmbedding(text);
-
-        if (result.success) {
-          // Store with metadata
-          await embeddingDB.add({
-            text: text,
-            embedding: result.embedding,
-            dimensions: result.dimensions,
-            timestamp: result.timestamp,
-            model: result.model,
-            metadata: {
-              type: "bookmark",
-              url: bookmark.url,
-              title: bookmark.title,
-              dateAdded: bookmark.dateAdded,
-            },
-          });
-          imported++;
-          console.log(`Imported: ${bookmark.title}`);
-        } else {
-          failed++;
-          console.error(`Failed to generate embedding for: ${bookmark.title}`);
-        }
-
-        // Small delay to prevent overwhelming the model
-        if (imported % 10 === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-      } catch (error) {
-        failed++;
-        console.error(`Error processing bookmark ${bookmark.title}:`, error);
-      }
-    }
+    // Start processing in batches (non-blocking)
+    processBatchImport(bookmarks, existingUrls, batchSize);
 
     return {
       success: true,
-      message: `Import complete! ${imported} imported, ${skipped} skipped (already exist), ${failed} failed`,
-      imported,
-      skipped,
-      failed,
+      message: "Import started",
       total: bookmarks.length,
     };
   } catch (error) {
-    console.error("Error importing bookmarks:", error);
+    console.error("Error starting batch import:", error);
+    importState.isImporting = false;
+    importState.error = error.message;
+    await broadcastImportProgress();
     return {
       success: false,
       error: error.message,
     };
   }
+}
+
+// Cancel ongoing import
+async function cancelImport() {
+  if (importState.isImporting) {
+    importState.cancelled = true;
+    await broadcastImportProgress();
+    return { success: true, message: "Import cancellation requested" };
+  }
+  return { success: false, error: "No import in progress" };
+}
+
+// Get current import progress
+function getImportProgress() {
+  return {
+    success: true,
+    progress: { ...importState },
+  };
 }
 
 // Process a single bookmark and create embedding
@@ -463,6 +596,7 @@ async function processBookmark(bookmark, bookmarkId) {
         embedding: result.embedding,
         dimensions: result.dimensions,
         timestamp: result.timestamp,
+        model: result.model,
         metadata: {
           type: "bookmark",
           url: bookmark.url,
@@ -601,6 +735,38 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       .catch((error) => {
         console.error("Error:", error);
       });
+  }
+});
+
+// Load import state on initialization and resume if needed
+loadImportState().then(async () => {
+  console.log("Import state loaded:", importState);
+
+  // If there was an import in progress that got interrupted, resume it
+  if (importState.isImporting && !importState.cancelled) {
+    console.log("Found interrupted import, resuming...");
+
+    try {
+      // Get all bookmarks
+      const bookmarks = await getAllBookmarks();
+
+      // Get existing embeddings to avoid duplicates
+      const existing = await embeddingDB.getAll();
+      const existingUrls = new Set(
+        existing.map((e) => e.metadata?.url).filter(Boolean),
+      );
+
+      // Resume processing from where we left off
+      console.log(
+        `Resuming import from bookmark ${importState.currentBookmarkIndex} of ${importState.total}`,
+      );
+      processBatchImport(bookmarks, existingUrls, 25);
+    } catch (error) {
+      console.error("Error resuming import:", error);
+      importState.isImporting = false;
+      importState.error = `Resume failed: ${error.message}`;
+      await broadcastImportProgress();
+    }
   }
 });
 

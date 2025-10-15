@@ -926,6 +926,92 @@ textarea {
     line-height: 1.4;
 }
 
+.bookmarks-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+}
+
+.btn-cancel-import {
+    background: var(--accent-danger);
+    color: white;
+    border: 2px solid var(--accent-danger);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    flex: 0 0 auto;
+}
+
+.btn-cancel-import:hover {
+    background: var(--accent-danger-hover);
+    border-color: var(--accent-danger-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.dark-mode .btn-cancel-import {
+    background: rgba(255, 107, 107, 0.2);
+    color: var(--accent-danger);
+    border: 2px solid rgba(255, 107, 107, 0.4);
+}
+
+.dark-mode .btn-cancel-import:hover {
+    background: rgba(255, 107, 107, 0.3);
+    border-color: var(--accent-danger);
+    transform: translateY(-1px);
+    box-shadow: 0 0 12px rgba(255, 107, 107, 0.2);
+}
+
+.import-progress {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.dark-mode .import-progress {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: var(--spacing-sm);
+}
+
+.dark-mode .progress-bar {
+    background: var(--bg-primary);
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s ease;
+    border-radius: var(--radius-md);
+}
+
+.dark-mode .progress-fill {
+    background: linear-gradient(
+        90deg,
+        var(--accent-teal) 0%,
+        var(--accent-primary) 100%
+    );
+    box-shadow: 0 0 10px rgba(20, 255, 236, 0.3);
+}
+
+.progress-text {
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.dark-mode .progress-text {
+    color: var(--text-secondary);
+}
+
 /* =================================================================
    SETTINGS TAB
    ================================================================= */
