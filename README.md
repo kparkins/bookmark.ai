@@ -4,7 +4,14 @@ A Chrome extension that generates text embeddings **locally** using Transformers
 
 **✨ Now following Chrome Extension best practices!**
 
-## 🚀 Quick Start
+## 🚀 Quick Start (From .crx file)
+
+1. Download `bookmark.ai.crx`
+3. Rename the file to bookmark.ai.zip
+4. Unzip the file to an empty folder.
+5. Go to chrome://extensions/ → Enable Developer Mode → Load Unpacked → Select the folder where the files were unzipped.
+
+## 🚀 Quick Start (From Source)
 
 ```bash
 # Install dependencies
@@ -20,13 +27,17 @@ npm run build
 ## ✨ Features
 
 - 🧠 **Local AI Processing** - Runs entirely in your browser using Transformers.js
-- 🔖 **Bookmark Import** - Import all browser bookmarks with one click
+- 🔖 **Automatic Bookmark Sync** - New bookmarks are automatically indexed in real-time
 - 🔍 **Semantic Search** - Find similar embeddings by meaning (not just keywords!)
-- ⚛️ **React UI** - Clean, modern interface built with React 18
+- 📚 **Library Management** - View, browse, and delete all stored embeddings
+- 🎨 **Modern Tab Interface** - Clean UI with Search, Library, Import, and Settings tabs
+- 🤖 **Multiple AI Models** - Choose from various embedding models with different dimensions
+- 🔄 **Model Switching** - Regenerate all embeddings when switching models
 - 💾 **Durable Storage** - IndexedDB ensures embeddings survive browser restarts
 - 📦 **Backup & Restore** - Export/import your data as JSON files
 - 🔒 **Privacy First** - No data leaves your browser
 - ⚡ **Fast** - Built with Vite for optimal performance
+- ⚛️ **React Architecture** - Component-based UI with hooks, context, and modern patterns
 
 ## 📁 Project Structure (Chrome Best Practices)
 
@@ -34,16 +45,30 @@ npm run build
 bookmark.ai/
 ├── manifest.json           # Extension config (root level per Chrome standards)
 ├── popup/                  # Popup UI files
-│   ├── popup.html
-│   ├── Popup.jsx          # React component
-│   └── Popup.css
+│   ├── popup.html         # Popup HTML entry point
+│   ├── popup-main.jsx     # React entry point
+│   ├── Popup.jsx          # Main React component with tab routing
+│   ├── Popup.css          # Global styles
+│   ├── components/        # React components
+│   │   ├── tabs/         # Tab components
+│   │   │   ├── SearchTab.jsx      # Semantic search interface
+│   │   │   ├── LibraryTab.jsx     # View all stored embeddings
+│   │   │   ├── ImportTab.jsx      # Import/export functionality
+│   │   │   └── SettingsTab.jsx    # Model selection & settings
+│   │   └── ui/           # Reusable UI components
+│   │       ├── TabBar.jsx         # Tab navigation
+│   │       └── StatusMessage.jsx  # Status notifications
+│   ├── context/          # React Context
+│   │   └── AppContext.jsx         # Global state management
+│   └── hooks/            # Custom React hooks
+│       ├── useEmbeddings.js       # Embeddings state
+│       ├── useSettings.js         # Settings management
+│       ├── useStatus.js           # Status messages
+│       └── useTheme.js            # Theme management
 ├── background/            # Service worker
-│   └── background.js      # Transformers.js integration
-├── content/               # Content scripts  
-│   └── content.js         # Text selection handler
+│   └── background.js      # Transformers.js integration & bookmark sync
 ├── lib/                   # Shared utilities
-│   ├── db.js             # IndexedDB wrapper
-│   └── storage.js
+│   └── db.js             # IndexedDB wrapper
 ├── assets/               # Static assets
 │   └── icons/            # Extension icons
 ├── dist/                  # Build output (load this in Chrome!)
@@ -54,48 +79,69 @@ bookmark.ai/
 
 ## 🎯 Usage
 
-### Generate Embeddings
+The extension features a modern tabbed interface with four main sections:
 
-**Method 1: Popup Interface**
-1. Click extension icon
-2. Enter or paste text
-3. Click "Generate & Store"
-
-**Method 2: Context Menu**
-1. Select text on any webpage
-2. Right-click → "Generate Embedding"
-
-### Import Bookmarks 🔖
-
-Turn your entire bookmark collection into searchable embeddings!
-
-1. Click "📚 Import All Bookmarks"
-2. Confirm the action
-3. Wait for processing (1-2 sec per bookmark)
-4. Search your bookmarks by meaning!
-
-**Example:** Search "web development" to find React docs, Vue guides, CSS tutorials, etc. - even if bookmark titles don't contain those words!
-
-👉 See [docs/BOOKMARK-IMPORT.md](./docs/BOOKMARK-IMPORT.md) for detailed guide.
-
-### Semantic Search 🔍
+### 🔍 Search Tab
 
 Search your embeddings by **meaning**, not just keywords!
 
 1. Enter a search query (e.g., "machine learning")
 2. Click 🔍 Search or press Enter
 3. View results ranked by similarity (0-100%)
-4. Find related content even with different words!
+4. Click on bookmark results to open them in a new tab
 
-**Example:** Search "artificial intelligence" to find embeddings about ML, neural networks, AI models, etc.
+**Example:** Search "artificial intelligence" to find bookmarks about ML, neural networks, AI models, etc. - even if bookmark titles don't contain those exact words!
 
 👉 See [docs/SEMANTIC-SEARCH.md](./docs/SEMANTIC-SEARCH.md) for detailed guide and examples.
 
-### Backup Your Data
+### 📚 Library Tab
 
-**Export:** Click "Export Backup" to download all embeddings as JSON
+Browse and manage all your stored embeddings:
 
-**Import:** Click "Import Backup" to restore from a file
+1. View all embeddings with their text content
+2. See metadata: model used, vector dimensions, type (bookmark/text)
+3. Click bookmark URLs to open them
+4. Delete individual embeddings with the 🗑️ button
+5. Use "Clear All" to delete all embeddings at once
+
+### 📥 Import Tab
+
+Manage your embedding data:
+
+**Import Bookmarks:**
+1. Click "📚 Import All Bookmarks"
+2. Confirm the action
+3. Wait for processing (1-2 sec per bookmark)
+4. All bookmarks become searchable!
+
+**Note:** New bookmarks are automatically indexed in real-time, so you typically only need to import once.
+
+**Backup & Restore:**
+- **Export:** Click "Export Backup" to download all embeddings as JSON
+- **Import:** Click "Import Backup" to restore from a file
+
+👉 See [docs/BOOKMARK-IMPORT.md](./docs/BOOKMARK-IMPORT.md) for detailed guide.
+
+### ⚙️ Settings Tab
+
+Configure your embedding model:
+
+1. Choose from multiple embedding models (different sizes and dimensions)
+2. View model details: dimensions and approximate size
+3. Click "Regenerate All Embeddings" to reprocess with the new model
+
+**Available Models:**
+- Xenova/all-MiniLM-L6-v2 (384d) - Default, fast and balanced
+- Xenova/paraphrase-multilingual-MiniLM-L12-v2 (384d) - Multilingual support
+- And more...
+
+### Context Menu (Optional)
+
+You can also generate embeddings from selected text:
+
+1. Select text on any webpage
+2. Right-click → "Generate Embedding"
+3. Text is automatically embedded and stored
 
 ## 🛠️ Development
 
@@ -110,23 +156,28 @@ npm run watch        # Watch mode for development
 ### Making Changes
 
 **Edit React UI:**
-- `popup/Popup.jsx` - Main React component
+- `popup/Popup.jsx` - Main app component with tab routing
+- `popup/components/tabs/` - Individual tab components (Search, Library, Import, Settings)
+- `popup/components/ui/` - Reusable UI components (TabBar, StatusMessage)
+- `popup/context/AppContext.jsx` - Global state management
+- `popup/hooks/` - Custom React hooks for state management
+- `popup/Popup.css` - Global styles
 
 **Edit Extension Backend:**
-- `background/background.js` - Embedding generation
-- `lib/db.js` - Database operations
+- `background/background.js` - Embedding generation, model management, bookmark sync
+- `lib/db.js` - IndexedDB operations
 
 **Update Extension Config:**
-- `manifest.json` - Extension settings
+- `manifest.json` - Extension settings and permissions
 
 ## 📂 Why This Structure?
 
 This project follows **official Chrome Extension best practices**:
 
-✅ `manifest.json` at root (Chrome requirement)  
-✅ Functional folders: `popup/`, `background/`, `content/`  
-✅ Shared code in `lib/`  
-✅ Assets in `assets/`  
+✅ `manifest.json` at root (Chrome requirement)
+✅ Functional folders: `popup/`, `background/`, `content/`
+✅ Shared code in `lib/`
+✅ Assets in `assets/`
 ✅ Build output in `dist/`
 
 **Benefits:**
@@ -146,10 +197,16 @@ This project follows **official Chrome Extension best practices**:
 ## 🔧 Technical Details
 
 - **Frontend:** React 18 + Vite
-- **AI Model:** `Xenova/all-MiniLM-L6-v2` (384-dimensional embeddings)
+- **Architecture:** Component-based with React Context and custom hooks
+- **State Management:** React Context API (AppContext)
+- **AI Models:** Multiple options available
+  - Default: `Xenova/all-MiniLM-L6-v2` (384-dimensional embeddings)
+  - Multilingual: `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (384d)
+  - And more configurable options
 - **Storage:** IndexedDB for persistence
 - **Build Tool:** Vite 5
-- **Bundle Size:** ~147KB (React + app code)
+- **Real-time Sync:** Automatic bookmark indexing via Chrome bookmarks API
+- **Bundle Size:** Optimized with Vite
 
 ## 🔐 Privacy & Security
 
@@ -162,9 +219,9 @@ This project follows **official Chrome Extension best practices**:
 ## 💾 Data Persistence
 
 **Survives:**
-✅ Browser restart  
-✅ Clearing cache  
-✅ Clearing cookies  
+✅ Browser restart
+✅ Clearing cache
+✅ Clearing cookies
 ✅ Clearing history
 
 **Lost if:**

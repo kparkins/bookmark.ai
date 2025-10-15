@@ -12,7 +12,6 @@ const dirsToCreate = [
   "dist",
   "dist/popup",
   "dist/background",
-  "dist/content",
   "dist/lib",
   "dist/assets",
   "dist/assets/icons",
@@ -36,10 +35,7 @@ try {
 // Vite will output it to dist/background/background.js
 
 // Copy library files
-const libFiles = [
-  { src: "lib/db.js", dest: "dist/lib/db.js" },
-  { src: "lib/storage.js", dest: "dist/lib/storage.js" },
-];
+const libFiles = [{ src: "lib/db.js", dest: "dist/lib/db.js" }];
 
 libFiles.forEach(({ src, dest }) => {
   try {
@@ -51,9 +47,7 @@ libFiles.forEach(({ src, dest }) => {
 });
 
 // Copy content scripts
-const contentFiles = [
-  { src: "content/content.js", dest: "dist/content/content.js" },
-];
+const contentFiles = [];
 
 contentFiles.forEach(({ src, dest }) => {
   try {
