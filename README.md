@@ -1,8 +1,6 @@
 # bookmark.ai - React Chrome Extension
 
-A Chrome extension that generates text embeddings **locally** using Transformers.js with a modern React UI for your browser bookmarks and makes them searchable.
-
-**✨ Now following Chrome Extension best practices!**
+A Chrome extension that generates text embeddings **locally** using Transformers.js for your browser bookmarks and makes them searchable.
 
 ## 🚀 Quick Start (From .crx file)
 
