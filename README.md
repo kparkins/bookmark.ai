@@ -173,7 +173,7 @@ npm run watch        # Watch mode for development
 This project follows **official Chrome Extension best practices**:
 
 ✅ `manifest.json` at root (Chrome requirement)
-✅ Functional folders: `popup/`, `background/`, `content/`
+✅ Functional folders: `popup/`, `background/`
 ✅ Shared code in `lib/`
 ✅ Assets in `assets/`
 ✅ Build output in `dist/`
