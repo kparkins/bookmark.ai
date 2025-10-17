@@ -25,6 +25,11 @@ export default defineConfig({
           return "[name].[ext]";
         },
       },
+      external: [
+        // Externalize lib files so they're not bundled
+        resolve(__dirname, "lib/settingsStore.js"),
+        resolve(__dirname, "lib/embeddingStore.js"),
+      ],
     },
     outDir: "dist",
     emptyOutDir: false,

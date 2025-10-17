@@ -35,7 +35,10 @@ try {
 // Vite will output it to dist/background/background.js
 
 // Copy library files
-const libFiles = [{ src: "lib/db.js", dest: "dist/lib/db.js" }];
+const libFiles = [
+  { src: "lib/settingsStore.js", dest: "dist/lib/settingsStore.js" },
+  { src: "lib/embeddingStore.js", dest: "dist/lib/embeddingStore.js" },
+];
 
 libFiles.forEach(({ src, dest }) => {
   try {

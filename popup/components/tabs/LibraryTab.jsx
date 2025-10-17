@@ -24,7 +24,7 @@ function LibraryTab() {
     }
   };
 
-  // Format model name
+  // // Format model name
   const formatModelName = (model) => {
     if (!model) return "Unknown";
     // Extract just the model name after the slash

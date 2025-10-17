@@ -74,15 +74,15 @@ function ImportTab() {
   useEffect(() => {
     // 1. Direct message listener for real-time updates
     const messageListener = (message) => {
-      if (message.action === "importProgress") {
+      if (message.action === "processingProgress") {
         handleProgressUpdate(message.progress);
       }
     };
 
     // 2. Storage change listener as fallback
     const storageListener = (changes, areaName) => {
-      if (areaName === "local" && changes.importState) {
-        handleProgressUpdate(changes.importState.newValue);
+      if (areaName === "local" && changes.processingState) {
+        handleProgressUpdate(changes.processingState.newValue);
       }
     };
 
@@ -104,10 +104,20 @@ function ImportTab() {
 
   // Handle progress updates
   const handleProgressUpdate = (progress) => {
-    setImportProgress(progress);
-    setImportingBookmarks(progress.isImporting);
+    if (!progress) {
+      return;
+    }
 
-    if (progress.isImporting) {
+    if (progress.activeTask !== "import") {
+      setImportingBookmarks(false);
+      setImportProgress(null);
+      return;
+    }
+
+    setImportProgress(progress);
+    setImportingBookmarks(Boolean(progress.isProcessing));
+
+    if (progress.isProcessing) {
       const percentage =
         progress.total > 0
           ? Math.round((progress.processed / progress.total) * 100)
@@ -116,7 +126,7 @@ function ImportTab() {
       // Show resume message if we picked up from a previous import
       const statusMessage = `Importing bookmarks... ${progress.processed}/${progress.total} (${percentage}%)`;
       showStatus(statusMessage, "loading");
-    } else if (progress.processed > 0) {
+    } else if (progress.processed > 0 || progress.imported > 0) {
       // Import completed or cancelled
       const message = progress.cancelled
         ? `Import cancelled. ${progress.imported} imported, ${progress.skipped} skipped, ${progress.failed} failed`

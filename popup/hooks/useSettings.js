@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
+import { settingsStore } from "../../lib/settingsStore.js";
 
 const availableModels = [
   {
     id: "Xenova/all-MiniLM-L6-v2",
-    name: "all-MiniLM-L6-v2 (Default)",
+    name: "all-MiniLM-L6-v2",
     description: "Fast, lightweight, 384 dimensions",
   },
   {
@@ -37,17 +38,17 @@ export function useSettings() {
   const [selectedModel, setSelectedModel] = useState("Xenova/all-MiniLM-L6-v2");
   const [customModel, setCustomModel] = useState("");
 
-  // Load settings from chrome storage
+  // Load settings from IndexedDB
   const loadSettings = async () => {
     try {
-      const result = await chrome.storage.local.get(["embeddingModel"]);
-      if (result.embeddingModel) {
-        if (availableModels.some((m) => m.id === result.embeddingModel)) {
-          setSelectedModel(result.embeddingModel);
+      const embeddingModel = await settingsStore.get("embeddingModel");
+      if (embeddingModel) {
+        if (availableModels.some((m) => m.id === embeddingModel)) {
+          setSelectedModel(embeddingModel);
         } else {
           // It's a custom model
           setSelectedModel("custom");
-          setCustomModel(result.embeddingModel);
+          setCustomModel(embeddingModel);
         }
       }
     } catch (error) {

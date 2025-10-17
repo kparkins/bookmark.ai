@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppContext } from "../../context/AppContext";
+import { settingsStore } from "../../../lib/settingsStore.js";
 
 const availableModels = [
   {
@@ -51,6 +52,77 @@ function SettingsTab() {
   const [regenerating, setRegenerating] = useState(false);
   const [regenerationProgress, setRegenerationProgress] = useState(null);
 
+  const handleRegenerationProgress = (progress) => {
+    if (!progress) return;
+
+    if (progress.activeTask !== "regeneration") {
+      setRegenerationProgress(null);
+      setRegenerating(false);
+      return;
+    }
+
+    setRegenerationProgress(progress);
+    setRegenerating(Boolean(progress.isProcessing));
+
+    if (progress.isProcessing) {
+      const percentage =
+        progress.total > 0
+          ? Math.round((progress.processed / progress.total) * 100)
+          : 0;
+      showStatus(
+        `Re-generating embeddings... ${progress.processed}/${progress.total} (${percentage}%)`,
+        "loading",
+      );
+    } else if (
+      progress.processed > 0 ||
+      progress.regenerated > 0 ||
+      progress.failed > 0
+    ) {
+      const regeneratedCount = progress.regenerated || 0;
+      const failedCount = progress.failed || 0;
+      const message = progress.cancelled
+        ? `Regeneration cancelled. ${regeneratedCount} regenerated, ${failedCount} failed`
+        : `Regeneration complete! ${regeneratedCount} regenerated, ${failedCount} failed`;
+
+      showStatus(message, progress.error ? "error" : "success");
+
+      if (!progress.error && !progress.cancelled && regeneratedCount > 0) {
+        loadEmbeddings();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const messageListener = (message) => {
+      if (message.action === "processingProgress") {
+        handleRegenerationProgress(message.progress);
+      }
+    };
+
+    const storageListener = (changes, areaName) => {
+      if (areaName === "local" && changes.processingState) {
+        handleRegenerationProgress(changes.processingState.newValue);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageListener);
+    chrome.storage.onChanged.addListener(storageListener);
+
+    chrome.runtime.sendMessage(
+      { action: "getRegenerationProgress" },
+      (response) => {
+        if (response?.success && response.progress) {
+          handleRegenerationProgress(response.progress);
+        }
+      },
+    );
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+      chrome.storage.onChanged.removeListener(storageListener);
+    };
+  }, []);
+
   // Save settings
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -66,8 +138,8 @@ function SettingsTab() {
         return;
       }
 
-      // Save to chrome storage
-      await chrome.storage.local.set({ embeddingModel: modelToSave });
+      // Save to IndexedDB
+      await settingsStore.set("embeddingModel", modelToSave);
 
       // Notify background script to reload model
       const response = await chrome.runtime.sendMessage({
@@ -99,8 +171,8 @@ function SettingsTab() {
     }
 
     setRegenerating(true);
-    setRegenerationProgress({ current: 0, total: 0 });
-    showStatus("Re-generating embeddings...", "loading");
+    setRegenerationProgress(null);
+    showStatus("Preparing to re-generate embeddings...", "loading");
 
     try {
       // First, save the model settings
@@ -113,7 +185,7 @@ function SettingsTab() {
         return;
       }
 
-      await chrome.storage.local.set({ embeddingModel: modelToSave });
+      await settingsStore.set("embeddingModel", modelToSave);
 
       // Notify background script to change model
       await chrome.runtime.sendMessage({
@@ -126,23 +198,58 @@ function SettingsTab() {
         action: "regenerateAllEmbeddings",
       });
 
-      if (response.success) {
-        showStatus(
-          `Successfully regenerated ${response.regenerated} embeddings! ${response.failed > 0 ? `(${response.failed} failed)` : ""}`,
-          "success",
-        );
-        await loadEmbeddings();
+      if (!response.success) {
+        if (response.error === "Regeneration already in progress") {
+          showStatus("Regeneration already in progress", "loading");
+        } else {
+          showStatus(
+            `Regeneration failed to start: ${response.error}`,
+            "error",
+          );
+          setRegenerating(false);
+          setRegenerationProgress(null);
+        }
+        return;
+      }
+
+      if (response.total === 0) {
+        showStatus("No embeddings found to regenerate.", "success");
+        setRegenerating(false);
+        setRegenerationProgress(null);
       } else {
-        showStatus(`Regeneration failed: ${response.error}`, "error");
+        showStatus(`Re-generating ${response.total} embeddings...`, "loading");
       }
     } catch (error) {
       console.error("Error regenerating embeddings:", error);
       showStatus(`Regeneration failed: ${error.message}`, "error");
-    } finally {
       setRegenerating(false);
       setRegenerationProgress(null);
     }
   };
+
+  const cancelRegeneration = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "cancelRegeneration",
+      });
+
+      if (response.success) {
+        showStatus("Cancelling regeneration...", "loading");
+      } else {
+        showStatus(response.error || "Unable to cancel regeneration", "error");
+      }
+    } catch (error) {
+      console.error("Error cancelling regeneration:", error);
+      showStatus(`Cancel failed: ${error.message}`, "error");
+    }
+  };
+
+  const regenerationPercentage =
+    regenerationProgress && regenerationProgress.total > 0
+      ? Math.round(
+          (regenerationProgress.processed / regenerationProgress.total) * 100,
+        )
+      : 0;
 
   return (
     <div className="tab-content">
@@ -223,10 +330,29 @@ function SettingsTab() {
           </button>
         </div>
 
-        {regenerating && regenerationProgress && (
+        {regenerationProgress?.isProcessing && (
           <div className="regeneration-progress">
-            <div className="progress-text">Processing embeddings...</div>
+            <div className="progress-bar">
+              <div
+                className="progress-fill"
+                style={{ width: `${regenerationPercentage}%` }}
+              />
+            </div>
+            <div className="progress-text">
+              {regenerationProgress.processed} / {regenerationProgress.total}{" "}
+              embeddings ({regenerationProgress.regenerated} regenerated,{" "}
+              {regenerationProgress.failed} failed)
+            </div>
           </div>
+        )}
+
+        {regenerating && (
+          <button
+            className="btn-cancel-regeneration"
+            onClick={cancelRegeneration}
+          >
+            ❌ Cancel Regeneration
+          </button>
         )}
 
         <div className="settings-note">

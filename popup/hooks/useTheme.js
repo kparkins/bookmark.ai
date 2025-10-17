@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
+import { settingsStore } from "../../lib/settingsStore.js";
 
 export function useTheme() {
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Load theme from chrome storage
+  // Load theme from IndexedDB
   const loadTheme = async () => {
     try {
-      const result = await chrome.storage.local.get(["darkMode"]);
-      if (result.darkMode !== undefined) {
-        setIsDarkMode(result.darkMode);
-        applyTheme(result.darkMode);
+      const darkMode = await settingsStore.get("darkMode");
+      if (darkMode !== null) {
+        setIsDarkMode(darkMode);
+        applyTheme(darkMode);
       }
     } catch (error) {
       console.error("Error loading theme:", error);
@@ -32,7 +33,7 @@ export function useTheme() {
     applyTheme(newMode);
 
     try {
-      await chrome.storage.local.set({ darkMode: newMode });
+      await settingsStore.set("darkMode", newMode);
     } catch (error) {
       console.error("Error saving theme:", error);
     }
