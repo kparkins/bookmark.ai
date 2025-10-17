@@ -12,6 +12,7 @@ const dirsToCreate = [
   "dist",
   "dist/popup",
   "dist/background",
+  "dist/background/tasks",
   "dist/lib",
   "dist/assets",
   "dist/assets/icons",
