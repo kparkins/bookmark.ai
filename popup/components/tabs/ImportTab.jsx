@@ -1,19 +1,22 @@
 import { useAppContext } from "../../context/AppContext";
 
 function ImportTab() {
-  const { loadEmbeddings, showStatus, processingProgress, cancelProcessing } =
-    useAppContext();
+  const {
+    loadEmbeddings,
+    showStatus,
+    clearStatus,
+    processingProgress,
+    cancelProcessing,
+  } = useAppContext();
 
   const isProcessing = Boolean(processingProgress?.isProcessing);
   const isImportActive =
     processingProgress?.activeTask === "import" &&
     processingProgress.isProcessing;
 
-  // Export embeddings
   const exportEmbeddings = async () => {
     try {
-      showStatus("Exporting embeddings...", "loading");
-
+      clearStatus();
       const response = await chrome.runtime.sendMessage({
         action: "exportEmbeddings",
       });
@@ -24,12 +27,12 @@ function ImportTab() {
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const filename = `embeddings-backup-${timestamp}.json`;
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = filename;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
 
         showStatus("Embeddings exported successfully!", "success");
@@ -37,19 +40,17 @@ function ImportTab() {
         showStatus(`Export failed: ${response.error}`, "error");
       }
     } catch (error) {
-      console.error("Error exporting:", error);
+      console.error("Error exporting embeddings:", error);
       showStatus(`Export failed: ${error.message}`, "error");
     }
   };
 
-  // Import embeddings
   const handleFileImport = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     try {
-      showStatus("Importing embeddings...", "loading");
-
+      clearStatus();
       const text = await file.text();
       const response = await chrome.runtime.sendMessage({
         action: "importEmbeddings",
@@ -57,23 +58,22 @@ function ImportTab() {
       });
 
       if (response.success) {
+        await loadEmbeddings();
         showStatus(
           `Successfully imported ${response.count} embeddings!`,
           "success",
         );
-        await loadEmbeddings();
       } else {
-        showStatus(`Import failed: ${response.error}`, "error");
+        throw new Error(response.error);
       }
     } catch (error) {
-      console.error("Error importing:", error);
+      console.error("Error importing embeddings from file:", error);
       showStatus(`Import failed: ${error.message}`, "error");
     } finally {
       event.target.value = "";
     }
   };
 
-  // Import all bookmarks
   const importBookmarks = async () => {
     if (
       !window.confirm(
@@ -84,23 +84,19 @@ function ImportTab() {
     }
 
     try {
+      clearStatus();
       const response = await chrome.runtime.sendMessage({
         action: "startBatchImport",
-        batchSize: 25,
+        batchSize: 1,
       });
 
       if (response.success) {
-        if (response.total > 0) {
-          showStatus(
-            `Starting import of ${response.total} bookmarks...`,
-            "loading",
-          );
-        } else {
-          showStatus("No new bookmarks found to import.", "success");
+        if (response.total === 0) {
           await loadEmbeddings();
+          showStatus("No new bookmarks found to import.", "success");
         }
       } else {
-        showStatus(`Import failed: ${response.error}`, "error");
+        throw new Error(response.error);
       }
     } catch (error) {
       console.error("Error importing bookmarks:", error);
@@ -108,8 +104,8 @@ function ImportTab() {
     }
   };
 
-  // Cancel import
   const cancelImport = () => {
+    clearStatus();
     cancelProcessing("import");
   };
 
@@ -146,20 +142,14 @@ function ImportTab() {
 
         <div className="bookmarks-buttons">
           <button
-            className="btn-import-bookmarks"
-            onClick={importBookmarks}
-            disabled={isProcessing}
+            className={`btn-import-bookmarks ${
+              isImportActive ? "is-active" : ""
+            }`}
+            onClick={isImportActive ? cancelImport : importBookmarks}
+            disabled={isProcessing && !isImportActive}
           >
-            {isImportActive
-              ? "⏳ Importing Bookmarks..."
-              : "📚 Import All Bookmarks"}
+            {isImportActive ? "❌ Cancel Import" : "📚 Import All Bookmarks"}
           </button>
-
-          {isImportActive && (
-            <button className="btn-cancel-import" onClick={cancelImport}>
-              ❌ Cancel Import
-            </button>
-          )}
         </div>
       </div>
     </div>

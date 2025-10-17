@@ -1,8 +1,19 @@
+import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 function LibraryTab() {
-  const { embeddings, deleteEmbedding, clearAllEmbeddings, showStatus } =
-    useAppContext();
+  const {
+    embeddings,
+    deleteEmbedding,
+    clearAllEmbeddings,
+    showStatus,
+    updateEmbedding,
+  } = useAppContext();
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [savingNotes, setSavingNotes] = useState({});
+  const [editingNotes, setEditingNotes] = useState({});
+  const [expandedSummaries, setExpandedSummaries] = useState({});
+
   // Truncate text for display
   const truncateText = (text, maxLength = 100) => {
     if (text.length <= maxLength) return text;
@@ -66,6 +77,120 @@ function LibraryTab() {
     }
   };
 
+  const getDraftNote = (embedding) => {
+    const draft = noteDrafts[embedding.id];
+    if (draft !== undefined) {
+      return draft;
+    }
+    return embedding.metadata?.notes || "";
+  };
+
+  const isNoteDirty = (embedding) => {
+    return (
+      (getDraftNote(embedding) || "").trim() !==
+      (embedding.metadata?.notes || "").trim()
+    );
+  };
+
+  const isSummaryExpanded = (id) => Boolean(expandedSummaries[id]);
+
+  const toggleSummaryExpansion = (id) => {
+    setExpandedSummaries((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const handleNoteChange = (id, value) => {
+    setNoteDrafts((prev) => ({
+      ...prev,
+      [id]: value,
+    }));
+  };
+
+  const beginEditingNotes = (embedding) => {
+    setEditingNotes((prev) => ({ ...prev, [embedding.id]: true }));
+    setNoteDrafts((prev) => ({
+      ...prev,
+      [embedding.id]: prev[embedding.id] ?? (embedding.metadata?.notes || ""),
+    }));
+  };
+
+  const cancelEditingNotes = (embedding) => {
+    setEditingNotes((prev) => {
+      const next = { ...prev };
+      delete next[embedding.id];
+      return next;
+    });
+    setNoteDrafts((prev) => {
+      const next = { ...prev };
+      delete next[embedding.id];
+      return next;
+    });
+  };
+
+  const handleSaveNote = async (embedding) => {
+    const draft = getDraftNote(embedding);
+    const currentNote = embedding.metadata?.notes || "";
+    const normalizedDraft = draft.trim();
+
+    if (normalizedDraft === currentNote.trim()) {
+      return;
+    }
+
+    setSavingNotes((prev) => ({ ...prev, [embedding.id]: true }));
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            action: "updateEmbeddingNote",
+            id: embedding.id,
+            note: normalizedDraft,
+          },
+          (result) => {
+            const error = chrome.runtime.lastError;
+            if (error) {
+              reject(new Error(error.message));
+              return;
+            }
+            resolve(result);
+          },
+        );
+      });
+
+      if (!response?.success) {
+        showStatus(response?.error || "Unable to update notes", "error");
+        return;
+      }
+
+      if (response.embedding) {
+        updateEmbedding(embedding.id, response.embedding);
+        setNoteDrafts((prev) => {
+          const next = { ...prev };
+          delete next[embedding.id];
+          return next;
+        });
+        setEditingNotes((prev) => {
+          const next = { ...prev };
+          delete next[embedding.id];
+          return next;
+        });
+      }
+
+      showStatus("Notes updated", "success");
+    } catch (error) {
+      console.error("Error updating notes:", error);
+      showStatus(error?.message || "Error updating notes", "error");
+    } finally {
+      setSavingNotes((prev) => {
+        const next = { ...prev };
+        delete next[embedding.id];
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="tab-content">
       <div className="embeddings-section">
@@ -88,60 +213,175 @@ function LibraryTab() {
           {embeddings.length === 0 ? (
             <div className="empty-state">No embeddings stored yet</div>
           ) : (
-            embeddings.map((embedding) => (
-              <div key={embedding.id} className="embedding-item">
-                <div className="embedding-card-header">
-                  {embedding.metadata?.url && (
-                    <span className="embedding-badge badge-bookmark">
-                      🔖 Bookmark
-                    </span>
-                  )}
-                  {!embedding.metadata?.url && (
-                    <span className="embedding-badge badge-text">�� Text</span>
-                  )}
-                </div>
+            embeddings.map((embedding) => {
+              const isBookmark = Boolean(embedding.metadata?.url);
+              const noteId = `notes-${embedding.id}`;
+              const notePreview = (embedding.metadata?.notes || "").trim();
+              const isEditing = Boolean(editingNotes[embedding.id]);
+              const draftNote = getDraftNote(embedding);
+              const hasSummary = Boolean(
+                embedding.metadata?.summary &&
+                  embedding.metadata.summary.trim(),
+              );
 
-                <div className="embedding-content">
-                  <div className="embedding-text">
-                    {truncateText(embedding.text)}
+              return (
+                <div key={embedding.id} className="embedding-item">
+                  <div className="embedding-item-header">
+                    <div className="embedding-item-title">
+                      <span
+                        className={`embedding-type ${
+                          isBookmark ? "bookmark" : "text"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {isBookmark ? "🔖" : "📝"}
+                      </span>
+                      <span className="embedding-title">
+                        {embedding.metadata?.title ||
+                          truncateText(embedding.text, 80)}
+                      </span>
+                    </div>
+                    {/* {isBookmark && (
+                      <button
+                        type="button"
+                        className="btn-open-link"
+                        onClick={() => handleResultClick(embedding)}
+                      >
+                        Open
+                      </button>
+                    )}*/}
                   </div>
-                </div>
 
-                {embedding.metadata?.url && (
-                  <div
-                    className="embedding-url clickable"
-                    title={embedding.metadata.url}
-                    onClick={() => handleResultClick(embedding)}
-                  >
-                    🔗 {truncateUrl(embedding.metadata.url)}
-                  </div>
-                )}
-
-                <div className="embedding-footer">
-                  <div className="embedding-metadata">
-                    <span
-                      className="metadata-chip"
-                      title={`Model: ${embedding.model}`}
+                  {isBookmark && (
+                    <div
+                      className="embedding-url-line clickable"
+                      title={embedding.metadata.url}
+                      onClick={() => handleResultClick(embedding)}
                     >
-                      🤖 {formatModelName(embedding.model)}
-                    </span>
-                    <span className="metadata-chip" title="Vector dimensions">
-                      📊 {embedding.dimensions}d
-                    </span>
+                      {truncateUrl(embedding.metadata.url)}
+                    </div>
+                  )}
+
+                  <div className="embedding-body">
+                    {hasSummary && (
+                      <div
+                        className={`embedding-summary ${
+                          isSummaryExpanded(embedding.id) ? "is-expanded" : ""
+                        }`}
+                      >
+                        {isSummaryExpanded(embedding.id) && (
+                          <div className="embedding-summary-text">
+                            {embedding.metadata.summary}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-summary-toggle"
+                          onClick={() => toggleSummaryExpansion(embedding.id)}
+                        >
+                          {isSummaryExpanded(embedding.id)
+                            ? "Hide summary"
+                            : "Show summary"}
+                        </button>
+                      </div>
+                    )}
+
+                    {!isBookmark && (
+                      <div className="embedding-text-preview">
+                        {truncateText(embedding.text, 200)}
+                      </div>
+                    )}
+
+                    <div className="embedding-notes">
+                      <div className="notes-header">
+                        <span>Notes</span>
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            className="btn-add-note"
+                            onClick={() => beginEditingNotes(embedding)}
+                          >
+                            {notePreview ? "Edit" : "Add note"}
+                          </button>
+                        )}
+                      </div>
+
+                      {isEditing ? (
+                        <>
+                          <textarea
+                            id={noteId}
+                            className="notes-textarea"
+                            aria-label="Bookmark notes"
+                            placeholder="Add personal context or reminders..."
+                            value={draftNote}
+                            onChange={(event) =>
+                              handleNoteChange(embedding.id, event.target.value)
+                            }
+                            rows={3}
+                          />
+                          <div className="notes-actions">
+                            <button
+                              type="button"
+                              className="btn-save-note"
+                              onClick={() => handleSaveNote(embedding)}
+                              disabled={
+                                savingNotes[embedding.id] ||
+                                !isNoteDirty(embedding)
+                              }
+                            >
+                              {savingNotes[embedding.id] ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-reset-note"
+                              onClick={() => cancelEditingNotes(embedding)}
+                              disabled={savingNotes[embedding.id]}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div
+                          className={`notes-preview ${
+                            notePreview ? "" : "notes-empty"
+                          }`}
+                        >
+                          {notePreview
+                            ? truncateText(notePreview, 220)
+                            : "No notes yet"}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    className="btn-delete-icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteEmbedding(embedding.id);
-                    }}
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
+
+                  <div className="embedding-footer">
+                    <div className="embedding-metadata">
+                      <span
+                        className="metadata-chip"
+                        title={`Model: ${embedding.model}`}
+                      >
+                        🤖 {formatModelName(embedding.model)}
+                      </span>
+                      <span className="metadata-chip" title="Vector dimensions">
+                        📊 {embedding.dimensions}d
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-delete-icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteEmbedding(embedding.id);
+                      }}
+                      title="Delete"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

@@ -3,7 +3,16 @@
   "name": "bookmark.ai",
   "version": "1.0.0",
   "description": "Generate text embeddings locally using Transformers.js",
-  "permissions": ["storage", "activeTab", "contextMenus", "bookmarks"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "bookmarks",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background/background.js",
     "type": "module"

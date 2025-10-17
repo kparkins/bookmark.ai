@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 const TASK_DESCRIPTORS = {
   import: {
     icon: "📥",
+    label: "Importing Bookmarks",
+    cancelLabel: "Cancel Import",
     running: (progress, percentage) =>
       `Importing bookmarks... ${progress.processed}/${progress.total} (${percentage}%)`,
     finished: (progress) => {
@@ -17,7 +19,7 @@ const TASK_DESCRIPTORS = {
       const imported = progress.imported || 0;
       const skipped = progress.skipped || 0;
       const failed = progress.failed || 0;
-      return `${progress.processed} / ${progress.total} bookmarks (${imported} imported, ${skipped} skipped, ${failed} failed)`;
+      return `${progress.processed} / ${progress.total} bookmarks (${failed} failed)`;
     },
     cancelAction: "cancelImport",
     cancelMessage: "Cancelling import...",
@@ -25,6 +27,8 @@ const TASK_DESCRIPTORS = {
   },
   regeneration: {
     icon: "🛠️",
+    label: "Re-generating Embeddings",
+    cancelLabel: "Cancel Regeneration",
     running: (progress, percentage) =>
       `Re-generating embeddings... ${progress.processed}/${progress.total} (${percentage}%)`,
     finished: (progress) => {
@@ -37,7 +41,7 @@ const TASK_DESCRIPTORS = {
     detail: (progress) => {
       const regenerated = progress.regenerated || 0;
       const failed = progress.failed || 0;
-      return `${progress.processed} / ${progress.total} embeddings (${regenerated} regenerated, ${failed} failed)`;
+      return `${progress.processed} / ${progress.total} embeddings (${failed} failed)`;
     },
     cancelAction: "cancelRegeneration",
     cancelMessage: "Cancelling regeneration...",
@@ -115,20 +119,12 @@ export function useProcessing(loadEmbeddings, showStatus) {
     chrome.runtime.onMessage.addListener(messageListener);
     chrome.storage.onChanged.addListener(storageListener);
 
-    chrome.runtime.sendMessage({ action: "getImportProgress" }, (response) => {
-      if (response?.success) {
-        handleProgressUpdate(response.progress);
+    // Load initial state from storage immediately
+    chrome.storage.local.get("processingState", (result) => {
+      if (result?.processingState) {
+        handleProgressUpdate(result.processingState);
       }
     });
-
-    chrome.runtime.sendMessage(
-      { action: "getRegenerationProgress" },
-      (response) => {
-        if (response?.success) {
-          handleProgressUpdate(response.progress);
-        }
-      },
-    );
 
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
@@ -144,7 +140,9 @@ export function useProcessing(loadEmbeddings, showStatus) {
     const summary = summarizeProgress(progress);
     if (summary) {
       const key = `${summary.type}:${summary.text}`;
-      if (lastStatusKey.current !== key) {
+      if (summary.type === "loading") {
+        lastStatusKey.current = key;
+      } else if (lastStatusKey.current !== key) {
         lastStatusKey.current = key;
         showStatus(summary.text, summary.type);
       }
@@ -192,7 +190,7 @@ export function useProcessing(loadEmbeddings, showStatus) {
   };
 
   const bannerDetails = useMemo(() => {
-    if (!progress?.isProcessing) {
+    if (!progress) {
       return null;
     }
 
@@ -201,15 +199,30 @@ export function useProcessing(loadEmbeddings, showStatus) {
       return null;
     }
 
+    const hasRemainingWork =
+      progress.isProcessing ||
+      (progress.total > 0 &&
+        progress.processed < progress.total &&
+        !progress.error &&
+        !progress.cancelled);
+
+    if (!hasRemainingWork) {
+      return null;
+    }
+
+    const displayedProcessed = progress.processed;
+
     const percentage =
       progress.total > 0
-        ? Math.round((progress.processed / progress.total) * 100)
+        ? Math.round((displayedProcessed / progress.total) * 100)
         : 0;
 
     return {
       icon: descriptor.icon,
+      label: descriptor.label,
+      cancelLabel: descriptor.cancelLabel,
       percentage,
-      detail: descriptor.detail(progress),
+      detail: descriptor.detail({ ...progress, displayedProcessed }),
     };
   }, [progress]);
 

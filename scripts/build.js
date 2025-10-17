@@ -16,6 +16,7 @@ const dirsToCreate = [
   "dist/lib",
   "dist/assets",
   "dist/assets/icons",
+  "dist/offscreen",
 ];
 
 dirsToCreate.forEach((dir) => {
@@ -73,6 +74,11 @@ const iconFiles = [
   "assets/icons/README.txt",
 ];
 
+const offscreenFiles = [
+  { src: "offscreen/offscreen.html", dest: "dist/offscreen/offscreen.html" },
+  { src: "offscreen/offscreen.js", dest: "dist/offscreen/offscreen.js" },
+];
+
 iconFiles.forEach((file) => {
   try {
     if (existsSync(file)) {
@@ -82,6 +88,15 @@ iconFiles.forEach((file) => {
     }
   } catch (error) {
     console.error(`❌ Failed to copy ${file}:`, error.message);
+  }
+});
+
+offscreenFiles.forEach(({ src, dest }) => {
+  try {
+    copyFileSync(src, dest);
+    console.log(`✅ Copied ${src} → ${dest}`);
+  } catch (error) {
+    console.error(`❌ Failed to copy ${src}:`, error.message);
   }
 });
 

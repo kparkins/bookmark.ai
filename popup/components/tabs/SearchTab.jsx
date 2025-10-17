@@ -14,6 +14,20 @@ function SearchTab() {
     return text.substring(0, maxLength) + "...";
   };
 
+  const truncateUrl = (url) => {
+    if (!url) return "";
+    try {
+      const urlObj = new URL(url);
+      const path = urlObj.pathname + urlObj.search;
+      return (
+        urlObj.hostname +
+        (path.length > 40 ? `${path.substring(0, 40)}...` : path)
+      );
+    } catch {
+      return url.length > 60 ? `${url.substring(0, 60)}...` : url;
+    }
+  };
+
   // Search embeddings by semantic similarity
   const searchEmbeddings = async () => {
     const trimmedQuery = searchQuery.trim();
@@ -123,13 +137,33 @@ function SearchTab() {
                     <span className="result-type">🔖 Bookmark</span>
                   )}
                 </div>
-                <div
-                  className={`embedding-text ${result.metadata?.url ? "clickable" : ""}`}
-                  onClick={() => handleResultClick(result)}
-                  style={result.metadata?.url ? { cursor: "pointer" } : {}}
-                >
-                  {truncateText(result.text)}
+                <div className="search-result-body">
+                  <div
+                    className={`result-title ${result.metadata?.url ? "clickable" : ""}`}
+                    onClick={() => handleResultClick(result)}
+                    role={result.metadata?.url ? "button" : undefined}
+                  >
+                    {result.metadata?.title
+                      ? truncateText(result.metadata.title, 120)
+                      : truncateText(result.text, 120)}
+                  </div>
+
+                  {result.metadata?.notes && (
+                    <div className="result-notes">
+                      <strong>Notes:</strong>{" "}
+                      {truncateText(result.metadata.notes, 180)}
+                    </div>
+                  )}
                 </div>
+
+                {result.metadata?.url && (
+                  <div
+                    className="result-url clickable"
+                    onClick={() => handleResultClick(result)}
+                  >
+                    🔗 {truncateUrl(result.metadata.url)}
+                  </div>
+                )}
               </div>
             ))}
           </div>

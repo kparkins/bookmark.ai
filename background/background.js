@@ -5,6 +5,8 @@ import {
   storeEmbedding,
   processBookmark,
   getSelectedModel,
+  composeEmbeddingInput,
+  updateEmbeddingNote,
 } from "./embeddingService.js";
 import {
   startBatchImport,
@@ -17,6 +19,19 @@ import {
   getRegenerationProgress,
 } from "./tasks/regenerationTask.js";
 import { initializeProcessingState } from "./processingService.js";
+import { generateSummaryForUrl } from "./summarizationService.js";
+import { ensureKeepAlive, releaseKeepAlive } from "./keepAlive.js";
+
+let keepAlivePort = null;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === "offscreen-keepalive") {
+    keepAlivePort = port;
+    port.onDisconnect.addListener(() => {
+      keepAlivePort = null;
+    });
+  }
+});
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
@@ -123,7 +138,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
 
     case "startBatchImport":
-      startBatchImport(request.batchSize || 25)
+      ensureKeepAlive()
+        .then(() => startBatchImport(request.batchSize || 1))
         .then((result) => {
           sendResponse(result);
         })
@@ -202,6 +218,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
       return true;
 
+    case "updateEmbeddingNote":
+      updateEmbeddingNote(request.id, request.note)
+        .then((result) => {
+          sendResponse(result);
+        })
+        .catch((error) => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true;
+
+    case "keepalive:ping":
+      sendResponse({ success: true });
+      return false;
+
     default:
       console.warn(`Unknown action: ${request.action}`);
       return false;
@@ -214,7 +244,17 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   if (!bookmark.url) {
     return;
   }
-  const result = await processBookmark(bookmark, id);
+  let summary = null;
+  try {
+    summary = await generateSummaryForUrl(bookmark.url);
+  } catch (error) {
+    console.warn(`Failed to generate summary for new bookmark: ${error}`);
+  }
+
+  const result = await processBookmark(bookmark, id, {
+    summary,
+    notes: "",
+  });
 
   if (!result.success) {
     return;
@@ -248,24 +288,56 @@ chrome.bookmarks.onChanged.addListener(async (id) => {
     );
 
     if (!existingEmbedding) {
-      await processBookmark(bookmark, id);
+      let summary = null;
+      try {
+        summary = await generateSummaryForUrl(bookmark.url);
+      } catch (error) {
+        console.warn(
+          `Failed to generate summary for updated bookmark: ${error}`,
+        );
+      }
+      await processBookmark(bookmark, id, { summary, notes: "" });
       return;
     }
 
-    const text = `${bookmark.title} - ${bookmark.url}`;
-    const result = await generateEmbedding(text);
+    let summary = existingEmbedding.metadata?.summary || null;
+    try {
+      const regeneratedSummary = await generateSummaryForUrl(bookmark.url);
+      if (regeneratedSummary) {
+        summary = regeneratedSummary;
+      }
+    } catch (error) {
+      console.warn(
+        `Summary refresh failed for updated bookmark ${bookmark.url}:`,
+        error,
+      );
+    }
+
+    const notes = existingEmbedding.metadata?.notes || "";
+
+    const combinedText =
+      composeEmbeddingInput({
+        title: bookmark.title,
+        url: bookmark.url,
+        summary,
+        notes,
+      }) || `${bookmark.title} - ${bookmark.url}`;
+
+    const result = await generateEmbedding(combinedText);
 
     if (!result.success) {
       return;
     }
 
     await embeddingStore.update(existingEmbedding.id, {
-      text: text,
+      text: combinedText,
       embedding: result.embedding,
       metadata: {
         ...existingEmbedding.metadata,
         title: bookmark.title,
         url: bookmark.url,
+        summary,
+        notes,
       },
     });
     console.log(`Embedding updated for: ${bookmark.title}`);

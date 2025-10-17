@@ -5,8 +5,13 @@ import {
   isProcessing,
   failProcessing,
 } from "../processingService.js";
-import { generateEmbedding, getAllBookmarks } from "../embeddingService.js";
+import {
+  composeEmbeddingInput,
+  generateEmbedding,
+  getAllBookmarks,
+} from "../embeddingService.js";
 import { embeddingStore } from "../../lib/embeddingStore.js";
+import { generateSummaryForUrl } from "../summarizationService.js";
 
 function createImportProcessor(existingUrls) {
   return async (bookmark) => {
@@ -18,8 +23,25 @@ function createImportProcessor(existingUrls) {
       return { status: "skip" };
     }
 
-    const text = `${bookmark.title} - ${bookmark.url}`;
-    const result = await generateEmbedding(text);
+    let summary = "";
+    try {
+      summary = await generateSummaryForUrl(bookmark.url);
+    } catch (error) {
+      console.warn(`Summary generation failed for ${bookmark.url}:`, error);
+      summary = null;
+    }
+
+    const combinedText = composeEmbeddingInput({
+      title: bookmark.title,
+      url: bookmark.url,
+      summary,
+      notes: "",
+    });
+
+    const textForEmbedding =
+      combinedText || `${bookmark.title} - ${bookmark.url}`;
+
+    const result = await generateEmbedding(textForEmbedding);
 
     if (!result.success) {
       console.error(`Failed to generate embedding for: ${bookmark.title}`);
@@ -27,7 +49,7 @@ function createImportProcessor(existingUrls) {
     }
 
     await embeddingStore.add({
-      text: text,
+      text: textForEmbedding,
       embedding: result.embedding,
       dimensions: result.dimensions,
       timestamp: result.timestamp,
@@ -37,6 +59,8 @@ function createImportProcessor(existingUrls) {
         url: bookmark.url,
         title: bookmark.title,
         dateAdded: bookmark.dateAdded,
+        summary,
+        notes: "",
       },
     });
 
@@ -46,7 +70,7 @@ function createImportProcessor(existingUrls) {
   };
 }
 
-export async function startBatchImport(batchSize = 25) {
+export async function startBatchImport(batchSize = 1) {
   console.log("Starting batch bookmark import...");
 
   if (isProcessing()) {
@@ -76,7 +100,7 @@ export async function startBatchImport(batchSize = 25) {
       importableBookmarks,
       createImportProcessor(existingUrls),
       {
-        batchSize,
+        batchSize: 1,
         delay: 100,
       },
     );

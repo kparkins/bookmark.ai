@@ -30,6 +30,7 @@ export function AppProvider({ children }) {
     loadEmbeddings: embeddings.loadEmbeddings,
     deleteEmbedding: embeddings.deleteEmbedding,
     clearAllEmbeddings: embeddings.clearAllEmbeddings,
+    updateEmbedding: embeddings.updateEmbedding,
 
     // Settings
     selectedModel: settings.selectedModel,

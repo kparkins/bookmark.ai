@@ -5,16 +5,26 @@ import {
   isProcessing,
   failProcessing,
 } from "../processingService.js";
-import { initializeModel, generateEmbedding } from "../embeddingService.js";
+import {
+  initializeModel,
+  generateEmbedding,
+  composeEmbeddingInput,
+} from "../embeddingService.js";
 import { embeddingStore } from "../../lib/embeddingStore.js";
 
 function createRegenerationProcessor() {
   return async (embedding) => {
-    const preview = embedding.text
-      ? embedding.text.substring(0, 50)
-      : "embedding";
+    const combinedText =
+      composeEmbeddingInput({
+        title: embedding.metadata?.title,
+        url: embedding.metadata?.url,
+        summary: embedding.metadata?.summary,
+        notes: embedding.metadata?.notes,
+      }) || embedding.text;
 
-    const result = await generateEmbedding(embedding.text);
+    const preview = combinedText ? combinedText.substring(0, 50) : "embedding";
+
+    const result = await generateEmbedding(combinedText);
 
     if (!result.success) {
       console.error(`Failed to regenerate embedding: ${preview}...`);
@@ -22,6 +32,7 @@ function createRegenerationProcessor() {
     }
 
     await embeddingStore.update(embedding.id, {
+      text: combinedText,
       embedding: result.embedding,
       dimensions: result.dimensions,
       model: result.model,
@@ -33,7 +44,7 @@ function createRegenerationProcessor() {
   };
 }
 
-export async function startEmbeddingsRegeneration(batchSize = 25) {
+export async function startEmbeddingsRegeneration(batchSize = 1) {
   console.log("Starting embeddings regeneration...");
 
   if (isProcessing()) {

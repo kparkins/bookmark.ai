@@ -1,3 +1,5 @@
+import { ensureKeepAlive, releaseKeepAlive } from "./keepAlive.js";
+
 const PROCESSING_STORAGE_KEY = "processingState";
 
 const defaultProcessingState = () => ({
@@ -17,6 +19,14 @@ const defaultProcessingState = () => ({
 
 let processingState = defaultProcessingState();
 let processingJob = null;
+
+function getStoredProcessingState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(PROCESSING_STORAGE_KEY, (result) => {
+      resolve(result?.[PROCESSING_STORAGE_KEY] || null);
+    });
+  });
+}
 
 function withTaskAliases(state) {
   const snapshot = { ...state };
@@ -58,6 +68,7 @@ async function finishProcessing(onComplete) {
   await broadcastProcessingState();
   processingJob = null;
   onComplete?.({ ...withTaskAliases(processingState) });
+  await releaseKeepAlive();
 }
 
 async function processNextBatch() {
@@ -124,8 +135,8 @@ export async function startProcessing(task, items, processItem, options = {}) {
     throw new Error("Another task is already running");
   }
 
-  const batchSize = options.batchSize || 25;
-  const delay = options.delay ?? 100;
+  const batchSize = options.batchSize || 1;
+  const delay = options.delay ?? 0;
   const onComplete = options.onComplete;
 
   processingState = {
@@ -145,6 +156,7 @@ export async function startProcessing(task, items, processItem, options = {}) {
     onComplete,
   };
 
+  await ensureKeepAlive();
   await broadcastProcessingState();
 
   if (items.length === 0) {
@@ -197,10 +209,21 @@ export async function failProcessing(message) {
   processingState.completedAt = Date.now();
   processingJob = null;
   await broadcastProcessingState();
+  await releaseKeepAlive();
 }
 
 export async function initializeProcessingState() {
-  processingState = defaultProcessingState();
+  const storedState = await getStoredProcessingState();
+
+  if (storedState) {
+    processingState = {
+      ...defaultProcessingState(),
+      ...storedState,
+    };
+  } else {
+    processingState = defaultProcessingState();
+  }
+
   processingJob = null;
   await broadcastProcessingState();
 }
