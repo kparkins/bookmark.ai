@@ -211,22 +211,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   console.log("New bookmark detected:", bookmark);
 
-  if (bookmark.url) {
-    const result = await processBookmark(bookmark, id);
+  if (!bookmark.url) {
+    return;
+  }
+  const result = await processBookmark(bookmark, id);
 
-    if (result.success) {
-      try {
-        await chrome.notifications.create({
-          type: "basic",
-          iconUrl: "icons/icon48.png",
-          title: "Bookmark Indexed",
-          message: `"${bookmark.title}" has been indexed for search`,
-          silent: true,
-        });
-      } catch (error) {
-        console.log("Could not show notification:", error);
-      }
-    }
+  if (!result.success) {
+    return;
+  }
+  try {
+    await chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon48.png",
+      title: "Bookmark Indexed",
+      message: `"${bookmark.title}" has been indexed for search`,
+      silent: true,
+    });
+  } catch (error) {
+    console.log("Could not show notification:", error);
   }
 });
 
@@ -237,32 +239,36 @@ chrome.bookmarks.onChanged.addListener(async (id) => {
     const bookmarks = await chrome.bookmarks.get(id);
     const bookmark = bookmarks[0];
 
-    if (bookmark.url) {
-      const existing = await embeddingStore.getAll();
-      const existingEmbedding = existing.find(
-        (e) => e.metadata?.bookmarkId === id,
-      );
-
-      if (existingEmbedding) {
-        const text = `${bookmark.title} - ${bookmark.url}`;
-        const result = await generateEmbedding(text);
-
-        if (result.success) {
-          await embeddingStore.update(existingEmbedding.id, {
-            text: text,
-            embedding: result.embedding,
-            metadata: {
-              ...existingEmbedding.metadata,
-              title: bookmark.title,
-              url: bookmark.url,
-            },
-          });
-          console.log(`Embedding updated for: ${bookmark.title}`);
-        }
-      } else {
-        await processBookmark(bookmark, id);
-      }
+    if (!bookmark.url) {
+      return;
     }
+    const existing = await embeddingStore.getAll();
+    const existingEmbedding = existing.find(
+      (e) => e.metadata?.bookmarkId === id,
+    );
+
+    if (!existingEmbedding) {
+      await processBookmark(bookmark, id);
+      return;
+    }
+
+    const text = `${bookmark.title} - ${bookmark.url}`;
+    const result = await generateEmbedding(text);
+
+    if (!result.success) {
+      return;
+    }
+
+    await embeddingStore.update(existingEmbedding.id, {
+      text: text,
+      embedding: result.embedding,
+      metadata: {
+        ...existingEmbedding.metadata,
+        title: bookmark.title,
+        url: bookmark.url,
+      },
+    });
+    console.log(`Embedding updated for: ${bookmark.title}`);
   } catch (error) {
     console.error("Error updating bookmark embedding:", error);
   }
@@ -277,41 +283,13 @@ chrome.bookmarks.onRemoved.addListener(async (id) => {
       (e) => e.metadata?.bookmarkId === id,
     );
 
-    if (embeddingToDelete) {
-      await embeddingStore.delete(embeddingToDelete.id);
-      console.log(`Embedding deleted for bookmark: ${id}`);
+    if (!embeddingToDelete) {
+      return;
     }
+    await embeddingStore.delete(embeddingToDelete.id);
+    console.log(`Embedding deleted for bookmark: ${id}`);
   } catch (error) {
     console.error("Error deleting bookmark embedding:", error);
-  }
-});
-
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "generateEmbedding",
-    title: "Generate Embedding",
-    contexts: ["selection"],
-  });
-});
-
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "generateEmbedding" && info.selectionText) {
-    generateEmbedding(info.selectionText)
-      .then((result) => {
-        if (result.success) {
-          return storeEmbedding(result);
-        }
-        throw new Error(result.error);
-      })
-      .then(() => {
-        chrome.action.setBadgeText({ text: "✓", tabId: tab.id });
-        setTimeout(() => {
-          chrome.action.setBadgeText({ text: "", tabId: tab.id });
-        }, 2000);
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-      });
   }
 });
 

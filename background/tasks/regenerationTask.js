@@ -43,46 +43,23 @@ export async function startEmbeddingsRegeneration(batchSize = 25) {
     };
   }
 
+  let embeddingsToProcess = [];
+
   try {
     await initializeModel(true);
 
-    const existingEmbeddings = await embeddingStore.getAll();
-    console.log(`Found ${existingEmbeddings.length} embeddings to regenerate`);
+    embeddingsToProcess = await embeddingStore.getAll();
+    console.log(`Found ${embeddingsToProcess.length} embeddings to regenerate`);
 
     await startProcessing(
       "regeneration",
-      existingEmbeddings,
+      embeddingsToProcess,
       createRegenerationProcessor(),
       {
         batchSize,
         delay: 100,
-        onComplete: (state) => {
-          if (state.cancelled) {
-            console.log(
-              `Regeneration cancelled. ${state.regenerated || 0} regenerated, ${state.failed || 0} failed`,
-            );
-          } else {
-            console.log(
-              `Regeneration complete! ${state.regenerated || 0} regenerated, ${state.failed || 0} failed`,
-            );
-          }
-        },
       },
     );
-
-    if (existingEmbeddings.length === 0) {
-      return {
-        success: true,
-        message: "No embeddings to regenerate",
-        total: 0,
-      };
-    }
-
-    return {
-      success: true,
-      message: "Regeneration started",
-      total: existingEmbeddings.length,
-    };
   } catch (error) {
     console.error("Error starting embeddings regeneration:", error);
     await failProcessing(error.message);
@@ -91,6 +68,14 @@ export async function startEmbeddingsRegeneration(batchSize = 25) {
       error: error.message,
     };
   }
+  return {
+    success: true,
+    message:
+      embeddingsToProcess.length > 0
+        ? "Regeneration started"
+        : "No embeddings to regenerate",
+    total: embeddingsToProcess.length,
+  };
 }
 
 export async function cancelRegeneration() {

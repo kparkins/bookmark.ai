@@ -11,13 +11,13 @@ let embeddingPipeline = null;
 let currentModel = "Xenova/all-MiniLM-L6-v2"; // Default model
 
 export async function getSelectedModel() {
+  let model;
   try {
-    const model = await settingsStore.get("embeddingModel");
-    return model || "Xenova/all-MiniLM-L6-v2";
+    model = await settingsStore.get("embeddingModel");
   } catch (error) {
     console.error("Error getting selected model:", error);
-    return "Xenova/all-MiniLM-L6-v2";
   }
+  return model || "Xenova/all-MiniLM-L6-v2";
 }
 
 export async function initializeModel(forceReload = false) {
@@ -88,6 +88,10 @@ export async function getAllBookmarks() {
   const bookmarks = [];
 
   function traverse(nodes) {
+    if (!nodes) {
+      return;
+    }
+
     for (const node of nodes) {
       if (node.url) {
         bookmarks.push({
@@ -97,7 +101,8 @@ export async function getAllBookmarks() {
           dateAdded: node.dateAdded,
         });
       }
-      if (node.children) {
+
+      if (node.children?.length) {
         traverse(node.children);
       }
     }
@@ -112,30 +117,28 @@ export async function processBookmark(bookmark, bookmarkId) {
     const text = `${bookmark.title} - ${bookmark.url}`;
     const result = await generateEmbedding(text);
 
-    if (result.success) {
-      await embeddingStore.add({
-        text: text,
-        embedding: result.embedding,
-        dimensions: result.dimensions,
-        timestamp: result.timestamp,
-        model: result.model,
-        metadata: {
-          type: "bookmark",
-          url: bookmark.url,
-          title: bookmark.title,
-          bookmarkId: bookmarkId,
-          dateAdded: bookmark.dateAdded || Date.now(),
-        },
-      });
-
-      console.log(`Embedding created for bookmark: ${bookmark.title}`);
-      return { success: true };
-    } else {
+    if (!result.success) {
       console.error(`Failed to generate embedding for: ${bookmark.title}`);
       return { success: false, error: result.error };
     }
+    await embeddingStore.add({
+      text: text,
+      embedding: result.embedding,
+      dimensions: result.dimensions,
+      timestamp: result.timestamp,
+      model: result.model,
+      metadata: {
+        type: "bookmark",
+        url: bookmark.url,
+        title: bookmark.title,
+        bookmarkId: bookmarkId,
+        dateAdded: bookmark.dateAdded || Date.now(),
+      },
+    });
   } catch (error) {
     console.error(`Error processing bookmark ${bookmark.title}:`, error);
     return { success: false, error: error.message };
   }
+  console.log(`Embedding created for bookmark: ${bookmark.title}`);
+  return { success: true };
 }

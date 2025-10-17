@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 import { settingsStore } from "../../../lib/settingsStore.js";
 
@@ -41,89 +41,23 @@ function SettingsTab() {
     setSelectedModel,
     customModel,
     setCustomModel,
+    searchResultsLimit,
+    setSearchResultsLimit,
     embeddings,
-    loadEmbeddings,
     showStatus,
     isDarkMode,
     toggleTheme,
+    processingProgress,
+    cancelProcessing,
   } = useAppContext();
 
   const [savingSettings, setSavingSettings] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [regenerationProgress, setRegenerationProgress] = useState(null);
 
-  const handleRegenerationProgress = (progress) => {
-    if (!progress) return;
+  const isProcessing = Boolean(processingProgress?.isProcessing);
+  const isRegenerating =
+    processingProgress?.activeTask === "regeneration" &&
+    processingProgress.isProcessing;
 
-    if (progress.activeTask !== "regeneration") {
-      setRegenerationProgress(null);
-      setRegenerating(false);
-      return;
-    }
-
-    setRegenerationProgress(progress);
-    setRegenerating(Boolean(progress.isProcessing));
-
-    if (progress.isProcessing) {
-      const percentage =
-        progress.total > 0
-          ? Math.round((progress.processed / progress.total) * 100)
-          : 0;
-      showStatus(
-        `Re-generating embeddings... ${progress.processed}/${progress.total} (${percentage}%)`,
-        "loading",
-      );
-    } else if (
-      progress.processed > 0 ||
-      progress.regenerated > 0 ||
-      progress.failed > 0
-    ) {
-      const regeneratedCount = progress.regenerated || 0;
-      const failedCount = progress.failed || 0;
-      const message = progress.cancelled
-        ? `Regeneration cancelled. ${regeneratedCount} regenerated, ${failedCount} failed`
-        : `Regeneration complete! ${regeneratedCount} regenerated, ${failedCount} failed`;
-
-      showStatus(message, progress.error ? "error" : "success");
-
-      if (!progress.error && !progress.cancelled && regeneratedCount > 0) {
-        loadEmbeddings();
-      }
-    }
-  };
-
-  useEffect(() => {
-    const messageListener = (message) => {
-      if (message.action === "processingProgress") {
-        handleRegenerationProgress(message.progress);
-      }
-    };
-
-    const storageListener = (changes, areaName) => {
-      if (areaName === "local" && changes.processingState) {
-        handleRegenerationProgress(changes.processingState.newValue);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(messageListener);
-    chrome.storage.onChanged.addListener(storageListener);
-
-    chrome.runtime.sendMessage(
-      { action: "getRegenerationProgress" },
-      (response) => {
-        if (response?.success && response.progress) {
-          handleRegenerationProgress(response.progress);
-        }
-      },
-    );
-
-    return () => {
-      chrome.runtime.onMessage.removeListener(messageListener);
-      chrome.storage.onChanged.removeListener(storageListener);
-    };
-  }, []);
-
-  // Save settings
   const saveSettings = async () => {
     setSavingSettings(true);
     showStatus("Saving settings...", "loading");
@@ -138,10 +72,34 @@ function SettingsTab() {
         return;
       }
 
-      // Save to IndexedDB
       await settingsStore.set("embeddingModel", modelToSave);
 
-      // Notify background script to reload model
+      const trimmedLimit = searchResultsLimit.trim();
+      let normalizedLimit = null;
+
+      if (trimmedLimit !== "") {
+        const parsedLimit = parseInt(trimmedLimit, 10);
+
+        if (Number.isNaN(parsedLimit) || parsedLimit < 1) {
+          showStatus(
+            "Search result limit must be a positive number or left blank.",
+            "error",
+          );
+          setSavingSettings(false);
+          return;
+        }
+
+        normalizedLimit = parsedLimit;
+      }
+
+      if (normalizedLimit === null) {
+        await settingsStore.delete("searchResultsLimit");
+        setSearchResultsLimit("");
+      } else {
+        await settingsStore.set("searchResultsLimit", normalizedLimit);
+        setSearchResultsLimit(String(normalizedLimit));
+      }
+
       const response = await chrome.runtime.sendMessage({
         action: "changeModel",
         model: modelToSave,
@@ -160,7 +118,6 @@ function SettingsTab() {
     }
   };
 
-  // Re-generate all embeddings with the current model
   const regenerateAllEmbeddings = async () => {
     if (
       !window.confirm(
@@ -170,30 +127,24 @@ function SettingsTab() {
       return;
     }
 
-    setRegenerating(true);
-    setRegenerationProgress(null);
     showStatus("Preparing to re-generate embeddings...", "loading");
 
     try {
-      // First, save the model settings
       const modelToSave =
         selectedModel === "custom" ? customModel : selectedModel;
 
       if (!modelToSave || modelToSave.trim() === "") {
         showStatus("Please select or enter a valid model", "error");
-        setRegenerating(false);
         return;
       }
 
       await settingsStore.set("embeddingModel", modelToSave);
 
-      // Notify background script to change model
       await chrome.runtime.sendMessage({
         action: "changeModel",
         model: modelToSave,
       });
 
-      // Request regeneration
       const response = await chrome.runtime.sendMessage({
         action: "regenerateAllEmbeddings",
       });
@@ -206,50 +157,24 @@ function SettingsTab() {
             `Regeneration failed to start: ${response.error}`,
             "error",
           );
-          setRegenerating(false);
-          setRegenerationProgress(null);
         }
         return;
       }
 
       if (response.total === 0) {
         showStatus("No embeddings found to regenerate.", "success");
-        setRegenerating(false);
-        setRegenerationProgress(null);
       } else {
         showStatus(`Re-generating ${response.total} embeddings...`, "loading");
       }
     } catch (error) {
       console.error("Error regenerating embeddings:", error);
       showStatus(`Regeneration failed: ${error.message}`, "error");
-      setRegenerating(false);
-      setRegenerationProgress(null);
     }
   };
 
-  const cancelRegeneration = async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: "cancelRegeneration",
-      });
-
-      if (response.success) {
-        showStatus("Cancelling regeneration...", "loading");
-      } else {
-        showStatus(response.error || "Unable to cancel regeneration", "error");
-      }
-    } catch (error) {
-      console.error("Error cancelling regeneration:", error);
-      showStatus(`Cancel failed: ${error.message}`, "error");
-    }
+  const cancelRegeneration = () => {
+    cancelProcessing("regeneration");
   };
-
-  const regenerationPercentage =
-    regenerationProgress && regenerationProgress.total > 0
-      ? Math.round(
-          (regenerationProgress.processed / regenerationProgress.total) * 100,
-        )
-      : 0;
 
   return (
     <div className="tab-content">
@@ -313,47 +238,41 @@ function SettingsTab() {
           </div>
         )}
 
+        <div className="search-settings">
+          <h3>🔍 Search Preferences</h3>
+          <div className="search-limit-input">
+            <label htmlFor="searchResultsLimit">Max Search Results</label>
+            <input
+              id="searchResultsLimit"
+              type="number"
+              min="1"
+              placeholder="Leave blank for all results"
+              value={searchResultsLimit}
+              onChange={(e) => setSearchResultsLimit(e.target.value)}
+            />
+            <small>
+              Limit how many matches appear for each search. Leave blank to
+              return every result.
+            </small>
+          </div>
+        </div>
+
         <div className="settings-buttons">
           <button
             className="btn-settings"
             onClick={saveSettings}
-            disabled={savingSettings || regenerating}
+            disabled={savingSettings || isProcessing}
           >
             {savingSettings ? "Saving..." : "Save Settings"}
           </button>
           <button
             className="btn-regenerate"
             onClick={regenerateAllEmbeddings}
-            disabled={regenerating || savingSettings || embeddings.length === 0}
+            disabled={isProcessing || savingSettings || embeddings.length === 0}
           >
-            {regenerating ? "Re-generating..." : "Re-generate All Embeddings"}
+            {isRegenerating ? "Re-generating..." : "Re-generate All Embeddings"}
           </button>
         </div>
-
-        {regenerationProgress?.isProcessing && (
-          <div className="regeneration-progress">
-            <div className="progress-bar">
-              <div
-                className="progress-fill"
-                style={{ width: `${regenerationPercentage}%` }}
-              />
-            </div>
-            <div className="progress-text">
-              {regenerationProgress.processed} / {regenerationProgress.total}{" "}
-              embeddings ({regenerationProgress.regenerated} regenerated,{" "}
-              {regenerationProgress.failed} failed)
-            </div>
-          </div>
-        )}
-
-        {regenerating && (
-          <button
-            className="btn-cancel-regeneration"
-            onClick={cancelRegeneration}
-          >
-            ❌ Cancel Regeneration
-          </button>
-        )}
 
         <div className="settings-note">
           <strong>Note:</strong> After changing the model, click "Re-generate

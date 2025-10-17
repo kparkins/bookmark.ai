@@ -56,8 +56,10 @@ export async function startBatchImport(batchSize = 25) {
     };
   }
 
+  let bookmarks = [];
+
   try {
-    const bookmarks = await getAllBookmarks();
+    bookmarks = await getAllBookmarks();
     console.log(`Found ${bookmarks.length} bookmarks`);
 
     const existing = await embeddingStore.getAll();
@@ -65,39 +67,27 @@ export async function startBatchImport(batchSize = 25) {
       existing.map((e) => e.metadata?.url).filter(Boolean),
     );
 
+    const importableBookmarks = bookmarks.filter(
+      (bookmark) => bookmark?.url && !existingUrls.has(bookmark.url),
+    );
+
     await startProcessing(
       "import",
-      bookmarks,
+      importableBookmarks,
       createImportProcessor(existingUrls),
       {
         batchSize,
         delay: 100,
-        onComplete: (state) => {
-          if (state.cancelled) {
-            console.log(
-              `Import cancelled. ${state.imported || 0} imported, ${state.skipped || 0} skipped, ${state.failed || 0} failed`,
-            );
-          } else {
-            console.log(
-              `Import complete! ${state.imported || 0} imported, ${state.skipped || 0} skipped, ${state.failed || 0} failed`,
-            );
-          }
-        },
       },
     );
 
-    if (bookmarks.length === 0) {
-      return {
-        success: true,
-        message: "No bookmarks found",
-        total: 0,
-      };
-    }
-
     return {
       success: true,
-      message: "Import started",
-      total: bookmarks.length,
+      message:
+        importableBookmarks.length > 0
+          ? "Import started"
+          : "No new bookmarks to import",
+      total: importableBookmarks.length,
     };
   } catch (error) {
     console.error("Error starting batch import:", error);

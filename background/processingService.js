@@ -64,9 +64,7 @@ async function processNextBatch() {
   if (!processingJob) {
     return;
   }
-
   const { items, processItem, batchSize, delay, onComplete } = processingJob;
-
   if (
     processingState.cancelled ||
     processingState.currentIndex >= items.length

@@ -37,6 +37,7 @@ const availableModels = [
 export function useSettings() {
   const [selectedModel, setSelectedModel] = useState("Xenova/all-MiniLM-L6-v2");
   const [customModel, setCustomModel] = useState("");
+  const [searchResultsLimit, setSearchResultsLimit] = useState("");
 
   // Load settings from IndexedDB
   const loadSettings = async () => {
@@ -50,6 +51,13 @@ export function useSettings() {
           setSelectedModel("custom");
           setCustomModel(embeddingModel);
         }
+      }
+
+      const storedLimit = await settingsStore.get("searchResultsLimit");
+      if (typeof storedLimit === "number" && storedLimit > 0) {
+        setSearchResultsLimit(String(storedLimit));
+      } else {
+        setSearchResultsLimit("");
       }
     } catch (error) {
       console.error("Error loading settings:", error);
@@ -67,6 +75,8 @@ export function useSettings() {
     setSelectedModel,
     customModel,
     setCustomModel,
+    searchResultsLimit,
+    setSearchResultsLimit,
     loadSettings,
   };
 }

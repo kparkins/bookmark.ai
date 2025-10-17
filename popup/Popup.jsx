@@ -1,6 +1,7 @@
 import { useState } from "react";
 import "./Popup.css";
 import TabBar from "./components/ui/TabBar";
+import ProcessingBanner from "./components/ui/ProcessingBanner";
 import StatusMessage from "./components/ui/StatusMessage";
 import SearchTab from "./components/tabs/SearchTab";
 import LibraryTab from "./components/tabs/LibraryTab";
@@ -15,6 +16,7 @@ function Popup() {
   return (
     <main>
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <ProcessingBanner />
       <StatusMessage message={status.message} type={status.type} />
 
       {activeTab === "search" && <SearchTab />}

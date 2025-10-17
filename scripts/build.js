@@ -39,6 +39,7 @@ try {
 const libFiles = [
   { src: "lib/settingsStore.js", dest: "dist/lib/settingsStore.js" },
   { src: "lib/embeddingStore.js", dest: "dist/lib/embeddingStore.js" },
+  { src: "lib/hnswIndex.js", dest: "dist/lib/hnswIndex.js" },
 ];
 
 libFiles.forEach(({ src, dest }) => {

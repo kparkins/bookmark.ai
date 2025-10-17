@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useAppContext } from "../../context/AppContext";
 
 function SearchTab() {
-  const { embeddings, showStatus } = useAppContext();
+  const { embeddings, showStatus, resolvedSearchResultsLimit } =
+    useAppContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -31,10 +32,15 @@ function SearchTab() {
     showStatus("Searching...", "loading");
 
     try {
+      const limit =
+        resolvedSearchResultsLimit && resolvedSearchResultsLimit > 0
+          ? resolvedSearchResultsLimit
+          : Math.max(embeddings.length, 1);
+
       const response = await chrome.runtime.sendMessage({
         action: "searchEmbeddings",
         query: trimmedQuery,
-        topK: 5,
+        topK: limit,
       });
 
       if (response.success) {
