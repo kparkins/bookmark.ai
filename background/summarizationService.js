@@ -1,9 +1,5 @@
 import { pipeline } from "@huggingface/transformers";
 import { ensureKeepAlive, releaseKeepAlive } from "./keepAlive.js";
-import {
-  extractContentFromUrl,
-  extractContentFromHTML,
-} from "./contentExtractor.js";
 
 let summarizationPipeline = null;
 
@@ -27,21 +23,6 @@ async function getSummarizer() {
   return summarizationPipeline;
 }
 
-function sanitizeHtml(html) {
-  if (!html) {
-    return "";
-  }
-
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<\/?(?:p|div|br|li|h[1-6])[^>]*>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export async function generateSummaryForUrl(url) {
   if (!url || !/^https?:\/\//i.test(url)) {
     return null;
@@ -49,57 +30,20 @@ export async function generateSummaryForUrl(url) {
 
   await ensureKeepAlive();
 
-  // Try to extract content using content script first
-  let cleanText = null;
-  const extractResult = await extractContentFromUrl(url);
+  // Extract content using offscreen document
+  const extractResult = await chrome.runtime.sendMessage({
+    action: "extractContent",
+    url: url,
+  });
 
-  if (extractResult.success && extractResult.content) {
-    cleanText = extractResult.content;
-    console.log(`Extracted ${cleanText.length} chars using content script`);
-  } else {
-    // Fallback to fetch-based approach
-    console.warn(`Content script failed for ${url}, falling back to fetch`);
-
-    let response;
-    try {
-      response = await fetch(url, {
-        method: "GET",
-        mode: "cors",
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch (error) {
-      console.warn(`Unable to fetch content for ${url}:`, error.message);
-      await releaseKeepAlive();
-      return null;
-    }
-
-    if (!response.ok) {
-      console.warn(`Failed to fetch ${url}: ${response.status}`);
-      await releaseKeepAlive();
-      return null;
-    }
-
-    let rawHtml;
-    try {
-      rawHtml = await response.text();
-    } catch (error) {
-      console.warn(`Failed to read response body for ${url}:`, error.message);
-      await releaseKeepAlive();
-      return null;
-    }
-
-    const htmlExtract = extractContentFromHTML(rawHtml, url);
-    if (htmlExtract.success && htmlExtract.content) {
-      cleanText = htmlExtract.content;
-    } else {
-      cleanText = sanitizeHtml(rawHtml);
-    }
-  }
-
-  if (!cleanText) {
+  if (!extractResult.success || !extractResult.content) {
+    console.warn(`Failed to extract content for ${url}:`, extractResult.error);
     await releaseKeepAlive();
     return null;
   }
+
+  const cleanText = extractResult.content;
+  console.log(`Extracted ${cleanText.length} chars for summarization`);
 
   const chunks = chunkText(cleanText, CHUNK_SIZE, MAX_CHUNKS);
   const summarizer = await getSummarizer();

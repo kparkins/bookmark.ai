@@ -7,9 +7,7 @@ async function hasOffscreenDocument() {
     return offscreenReady;
   }
   try {
-    return await chrome.offscreen.hasDocument({
-      url: "offscreen/offscreen.html",
-    });
+    return await chrome.offscreen.hasDocument();
   } catch (error) {
     console.warn("Unable to check offscreen document:", error);
     return offscreenReady;
