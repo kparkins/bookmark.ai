@@ -148,7 +148,7 @@ function ImportTab() {
             onClick={isImportActive ? cancelImport : importBookmarks}
             disabled={isProcessing && !isImportActive}
           >
-            {isImportActive ? "❌ Cancel Import" : "📚 Import All Bookmarks"}
+            {isImportActive ? "❌ Cancel Import" : "📚 Import Bookmarks"}
           </button>
         </div>
       </div>

@@ -6,13 +6,12 @@
   "permissions": [
     "storage",
     "activeTab",
+    "scripting",
     "contextMenus",
     "bookmarks",
     "offscreen"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background/background.js",
     "type": "module"

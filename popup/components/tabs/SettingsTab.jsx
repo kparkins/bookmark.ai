@@ -58,17 +58,20 @@ function SettingsTab() {
     processingProgress?.activeTask === "regeneration" &&
     processingProgress.isProcessing;
 
-  const saveSettings = async () => {
-    setSavingSettings(true);
-    showStatus("Saving settings...", "loading");
+  const saveSettings = async (silent = false) => {
+    if (!silent) {
+      setSavingSettings(true);
+    }
 
     try {
       const modelToSave =
         selectedModel === "custom" ? customModel : selectedModel;
 
       if (!modelToSave || modelToSave.trim() === "") {
-        showStatus("Please select or enter a valid model", "error");
-        setSavingSettings(false);
+        if (!silent) {
+          showStatus("Please select or enter a valid model", "error");
+          setSavingSettings(false);
+        }
         return;
       }
 
@@ -81,11 +84,13 @@ function SettingsTab() {
         const parsedLimit = parseInt(trimmedLimit, 10);
 
         if (Number.isNaN(parsedLimit) || parsedLimit < 1) {
-          showStatus(
-            "Search result limit must be a positive number or left blank.",
-            "error",
-          );
-          setSavingSettings(false);
+          if (!silent) {
+            showStatus(
+              "Search result limit must be a positive number or left blank.",
+              "error",
+            );
+            setSavingSettings(false);
+          }
           return;
         }
 
@@ -100,21 +105,40 @@ function SettingsTab() {
         setSearchResultsLimit(String(normalizedLimit));
       }
 
-      const response = await chrome.runtime.sendMessage({
+      await chrome.runtime.sendMessage({
         action: "changeModel",
         model: modelToSave,
       });
 
-      if (response && response.success) {
-        showStatus("Settings saved! Model will reload on next use.", "success");
-      } else {
+      if (!silent) {
         showStatus("Settings saved!", "success");
       }
     } catch (error) {
       console.error("Error saving settings:", error);
-      showStatus(`Error saving settings: ${error.message}`, "error");
+      if (!silent) {
+        showStatus(`Error saving settings: ${error.message}`, "error");
+      }
     } finally {
-      setSavingSettings(false);
+      if (!silent) {
+        setSavingSettings(false);
+      }
+    }
+  };
+
+  const handleModelChange = async (modelId) => {
+    setSelectedModel(modelId);
+    if (modelId !== "custom") {
+      await saveSettings(true);
+    }
+  };
+
+  const handleCustomModelChange = async (value) => {
+    setCustomModel(value);
+  };
+
+  const handleCustomModelBlur = async () => {
+    if (selectedModel === "custom" && customModel.trim()) {
+      await saveSettings(true);
     }
   };
 
@@ -196,88 +220,79 @@ function SettingsTab() {
         </div>
 
         <h3>⚙️ Model Settings</h3>
-        <p className="settings-description">
-          Choose which embedding model to use. Different models have different
-          quality and speed tradeoffs.
-        </p>
 
-        <div className="model-selection">
-          {availableModels.map((model) => (
-            <div key={model.id} className="model-option">
-              <label className="model-label">
-                <input
-                  type="radio"
-                  name="model"
-                  value={model.id}
-                  checked={selectedModel === model.id}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                />
-                <div className="model-info">
-                  <div className="model-name">{model.name}</div>
-                  <div className="model-description">{model.description}</div>
-                </div>
-              </label>
-            </div>
-          ))}
+        <div className="model-selection-compact">
+          <label htmlFor="modelSelect">Embedding Model</label>
+          <select
+            id="modelSelect"
+            value={selectedModel}
+            onChange={(e) => handleModelChange(e.target.value)}
+            disabled={isProcessing}
+          >
+            {availableModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+          <small className="model-description">
+            {availableModels.find((m) => m.id === selectedModel)?.description}
+          </small>
         </div>
 
         {selectedModel === "custom" && (
           <div className="custom-model-input">
-            <label htmlFor="customModel">Custom Model ID:</label>
+            <label htmlFor="customModel">Custom Model ID</label>
             <input
               id="customModel"
               type="text"
               value={customModel}
-              onChange={(e) => setCustomModel(e.target.value)}
+              onChange={(e) => handleCustomModelChange(e.target.value)}
+              onBlur={handleCustomModelBlur}
               placeholder="e.g., Xenova/paraphrase-multilingual-MiniLM-L12-v2"
+              disabled={isProcessing}
             />
             <small>
-              Enter a Hugging Face model ID that's compatible with
-              Transformers.js
+              Enter a Hugging Face model ID compatible with Transformers.js
             </small>
           </div>
         )}
 
         <div className="search-settings">
           <h3>🔍 Search Preferences</h3>
-          <div className="search-limit-input">
-            <label htmlFor="searchResultsLimit">Max Search Results</label>
-            <input
-              id="searchResultsLimit"
-              type="number"
-              min="1"
-              placeholder="Leave blank for all results"
-              value={searchResultsLimit}
-              onChange={(e) => setSearchResultsLimit(e.target.value)}
-            />
-            <small>
-              Limit how many matches appear for each search. Leave blank to
-              return every result.
-            </small>
+          <div className="search-limit-compact">
+            <div className="search-limit-row">
+              <label htmlFor="searchResultsLimit">Max Search Results</label>
+              <div className="search-limit-controls">
+                <input
+                  id="searchResultsLimit"
+                  type="number"
+                  min="1"
+                  placeholder="All"
+                  value={searchResultsLimit}
+                  onChange={(e) => setSearchResultsLimit(e.target.value)}
+                  onBlur={() => saveSettings(true)}
+                />
+              </div>
+            </div>
+            <small>Leave blank to show all search results</small>
           </div>
         </div>
 
         <div className="settings-buttons">
           <button
-            className="btn-settings"
-            onClick={saveSettings}
-            disabled={savingSettings || isProcessing}
-          >
-            {savingSettings ? "Saving..." : "Save Settings"}
-          </button>
-          <button
             className="btn-regenerate"
             onClick={regenerateAllEmbeddings}
-            disabled={isProcessing || savingSettings || embeddings.length === 0}
+            disabled={isProcessing || embeddings.length === 0}
           >
-            {isRegenerating ? "Re-generating..." : "Re-generate All Embeddings"}
+            {isRegenerating ? "Re-generating..." : "Re-generate Embeddings"}
           </button>
         </div>
 
         <div className="settings-note">
           <strong>Note:</strong> After changing the model, click "Re-generate
-          All Embeddings" to update existing embeddings with the new model. This
-          will preserve all your bookmarks and text embeddings.
+          Embeddings" to update existing embeddings with the new model. This
+          will preserve all your bookmarks, summaries, and notes.
         </div>
       </div>
     </div>

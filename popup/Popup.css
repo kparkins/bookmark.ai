@@ -1560,6 +1560,45 @@ textarea {
     line-height: 1.4;
 }
 
+.model-selection-compact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-lg);
+}
+
+.model-selection-compact label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.model-selection-compact select {
+    padding: var(--spacing-sm);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.model-selection-compact select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.model-selection-compact select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.model-selection-compact .model-description {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+}
+
 .model-selection {
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -1688,12 +1727,83 @@ textarea {
     box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
 }
 
+.search-limit-compact {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.search-limit-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.search-limit-row label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.search-limit-controls {
+    display: flex;
+    gap: var(--spacing-xs);
+    align-items: center;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.search-limit-controls input[type="number"] {
+    width: 80px;
+    padding: 6px var(--spacing-sm);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-sm);
+    text-align: center;
+}
+
+.search-limit-controls input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+
+.btn-clear-limit {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.btn-clear-limit:hover {
+    background: var(--hover-bg);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.search-limit-compact small {
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
 .dark-mode .search-settings {
     background: var(--bg-secondary);
     border-color: var(--border-color);
 }
 
-.dark-mode .search-limit-input input[type="number"] {
+.dark-mode .search-limit-input input[type="number"],
+.dark-mode .search-limit-controls input[type="number"] {
     background: var(--bg-primary);
     border-color: var(--border-color);
     color: var(--text-primary);
